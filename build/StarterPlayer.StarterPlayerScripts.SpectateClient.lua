@@ -74,7 +74,7 @@ local function label(parent, name, position, size, text, maxSize, extra)
 	for key, value in pairs(extra or {}) do
 		l[key] = value
 	end
-	make("UITextSizeConstraint", { MaxTextSize = maxSize or 20, MinTextSize = 6 }, l)
+	make("UITextSizeConstraint", { MaxTextSize = maxSize or 20, MinTextSize = 9 }, l)
 	return l
 end
 
@@ -91,7 +91,7 @@ local function button(parent, name, text, position, size, color, maxSize)
 		AutoButtonColor = true,
 	}, parent)
 	make("UICorner", { CornerRadius = UDim.new(0, 8) }, b)
-	make("UITextSizeConstraint", { MaxTextSize = maxSize or 18, MinTextSize = 6 }, b)
+	make("UITextSizeConstraint", { MaxTextSize = maxSize or 18, MinTextSize = 10 }, b)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6),
 		PaddingTop = UDim.new(0, 3), PaddingBottom = UDim.new(0, 3) }, b)
 	return b

@@ -75,7 +75,7 @@ local function label(parent, name, position, size, text, maxSize, extra)
 	for key, value in pairs(extra or {}) do
 		l[key] = value
 	end
-	make("UITextSizeConstraint", { MaxTextSize = maxSize or 20, MinTextSize = 6 }, l)
+	make("UITextSizeConstraint", { MaxTextSize = maxSize or 20, MinTextSize = 9 }, l)
 	return l
 end
 
@@ -92,7 +92,7 @@ local function button(parent, name, text, position, size, color)
 		AutoButtonColor = true,
 	}, parent)
 	make("UICorner", { CornerRadius = UDim.new(0, 8) }, b)
-	make("UITextSizeConstraint", { MaxTextSize = 18, MinTextSize = 6 }, b)
+	make("UITextSizeConstraint", { MaxTextSize = 18, MinTextSize = 10 }, b)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6),
 		PaddingTop = UDim.new(0, 3), PaddingBottom = UDim.new(0, 3) }, b)
 	return b
@@ -177,9 +177,12 @@ local function buildPages()
 
 	local bySection = {}
 	for _, card in ipairs(CardDatabase.GetAllCards()) do
-		local section = card.Faction
-		bySection[section] = bySection[section] or {}
-		table.insert(bySection[section], card.Id)
+		-- switched-off Anomalies only show if you own one
+		if card.Type ~= "Anomaly" or CardDatabase.IsMainDeckType(card.Type) or countOf(collection[card.Id]) > 0 then
+			local section = card.Faction
+			bySection[section] = bySection[section] or {}
+			table.insert(bySection[section], card.Id)
+		end
 	end
 	for _, section in ipairs(SECTIONS) do
 		local pockets = {}
@@ -221,26 +224,29 @@ end
 
 local function stats()
 	local collection = binder.Collection or {}
-	local all = CardDatabase.GetAllCards()
-	local have, foils = 0, 0
+	local have, foils, total = 0, 0, 0
 	local perFaction, finishes = {}, {}
-	for _, card in ipairs(all) do
-		local entry = collection[card.Id]
-		local f = perFaction[card.Faction] or { Have = 0, Total = 0 }
-		perFaction[card.Faction] = f
-		f.Total = f.Total + 1
-		if countOf(entry) > 0 then
-			have = have + 1
-			f.Have = f.Have + 1
-		end
-		for finish, count in pairs(entry or {}) do
-			finishes[finish] = (finishes[finish] or 0) + count
-			if finish ~= "Base" then
-				foils = foils + count
+	for _, card in ipairs(CardDatabase.GetAllCards()) do
+		-- switched-off card types (Anomalies) don't count toward the set
+		if card.Type ~= "Anomaly" or CardDatabase.IsMainDeckType(card.Type) then
+			local entry = collection[card.Id]
+			total = total + 1
+			local f = perFaction[card.Faction] or { Have = 0, Total = 0 }
+			perFaction[card.Faction] = f
+			f.Total = f.Total + 1
+			if countOf(entry) > 0 then
+				have = have + 1
+				f.Have = f.Have + 1
+			end
+			for finish, count in pairs(entry or {}) do
+				finishes[finish] = (finishes[finish] or 0) + count
+				if finish ~= "Base" then
+					foils = foils + count
+				end
 			end
 		end
 	end
-	return { Have = have, Total = #all, Foils = foils, PerFaction = perFaction, Finishes = finishes }
+	return { Have = have, Total = total, Foils = foils, PerFaction = perFaction, Finishes = finishes }
 end
 
 ---------------------------------------------------------------------
@@ -633,7 +639,8 @@ function render()
 	end
 	local s = stats()
 	title.Text = mine and "My Binder" or (binder.OwnerName .. "'s Binder")
-	subtitle.Text = ("%d of %d cards  |  %d foils  |  %s"):format(s.Have, s.Total, s.Foils,
+	subtitle.Text = ("%d of %d cards (%d%%)  |  %d foils  |  %s"):format(s.Have, s.Total,
+		s.Total > 0 and math.floor(s.Have / s.Total * 100) or 0, s.Foils,
 		mine and (isOut and "Your binder is out: others can look through it" or "Pull it out to let others look")
 			or "Flip with the arrows, Q / E, or the tabs")
 	local color = COVER_COLORS[binder.Cover] or COVER_COLORS.Black

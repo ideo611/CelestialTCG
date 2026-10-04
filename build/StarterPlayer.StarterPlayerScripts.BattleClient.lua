@@ -125,7 +125,7 @@ local function button(parent, name, text, position, size, tint)
 		TextScaled = true,
 		Text = text,
 	}, b)
-	make("UITextSizeConstraint", { MaxTextSize = 34 }, b.Label)
+	make("UITextSizeConstraint", { MaxTextSize = 34, MinTextSize = 10 }, b.Label)
 	b.Activated:Connect(function()
 		if playClick then
 			playClick()

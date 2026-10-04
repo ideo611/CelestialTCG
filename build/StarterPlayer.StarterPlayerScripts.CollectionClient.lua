@@ -59,7 +59,7 @@ local function label(parent, props)
 		end
 	end
 	local l = make("TextLabel", defaults, parent)
-	make("UITextSizeConstraint", { MaxTextSize = props.MaxText or 22, MinTextSize = 6 }, l)
+	make("UITextSizeConstraint", { MaxTextSize = props.MaxText or 22, MinTextSize = 9 }, l)
 	return l
 end
 
@@ -76,7 +76,7 @@ local function button(parent, name, text, position, size, color)
 		AutoButtonColor = true,
 	}, parent)
 	make("UICorner", { CornerRadius = UDim.new(0, 6) }, b)
-	make("UITextSizeConstraint", { MaxTextSize = 18, MinTextSize = 6 }, b)
+	make("UITextSizeConstraint", { MaxTextSize = 18, MinTextSize = 10 }, b)
 	make("UIPadding", {
 		PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6),
 		PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4),
@@ -312,19 +312,25 @@ end
 local FILTERS = { "All", "Solar", "Lunar", "Nebula", "Void", "Comet", "Neutral", "Leaders" }
 
 local function renderCollection()
-	local allIds, ownedCount = {}, 0
+	local allIds, ownedCount, total = {}, 0, 0
 	for _, card in ipairs(CardDatabase.GetAllCards()) do
-		if owned(card.Id) > 0 then
+		-- switched-off card types (Anomalies) can't be collected right now
+		local collectable = card.Type ~= "Anomaly" or CardDatabase.IsMainDeckType(card.Type)
+		if collectable then
+			total = total + 1
+		end
+		if collectable and owned(card.Id) > 0 then
 			ownedCount = ownedCount + 1
 		end
-		local pass = filter == "All"
+		local pass = collectable and (filter == "All"
 			or (filter == "Leaders" and (card.Type == "Commander" or card.Type == "Celestial"))
-			or (filter ~= "Leaders" and card.Faction == filter and card.Type ~= "Commander" and card.Type ~= "Celestial")
+			or (filter ~= "Leaders" and card.Faction == filter and card.Type ~= "Commander" and card.Type ~= "Celestial"))
 		if pass and (showUnowned or owned(card.Id) > 0) then
 			table.insert(allIds, card.Id)
 		end
 	end
-	headerLabel.Text = ("Collection: %d / %d cards found"):format(ownedCount, #CardDatabase.GetAllCards())
+	headerLabel.Text = ("Collection: %d / %d cards found (%d%%)"):format(ownedCount, total,
+		total > 0 and math.floor(ownedCount / total * 100) or 0)
 
 	for i, name in ipairs(FILTERS) do
 		local b = button(content, "Filter_" .. name, name, UDim2.fromOffset((i - 1) * 92, 0), UDim2.fromOffset(86, 34),

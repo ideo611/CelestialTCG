@@ -245,7 +245,8 @@ local hudMessage = text(gui, "GuideMessage", UDim2.new(0, 136, 0.45, -54), UDim2
 	{ TextColor3 = RED, TextXAlignment = Enum.TextXAlignment.Left, Visible = false })
 -- into the one HUD column (first-win reminder on top, small)
 firstWinHint.TextXAlignment = Enum.TextXAlignment.Center
-HudDock.Add(firstWinHint, 1).Size = UDim2.fromOffset(150, 34)
+HudDock.Add(firstWinHint, 1).Size = UDim2.fromOffset(150, 28)
+firstWinHint.TextScaled = true
 HudDock.Add(playButton, 10)
 HudDock.Add(howButton, 20)
 HudDock.Add(hudMessage, 90)
@@ -516,7 +517,7 @@ local function refresh()
 	firstWinHint.Visible = not state.InBattle and summary ~= nil and summary.FirstWinAvailable == true
 		and (summary.FirstWinBonus or 0) > 0 and (summary.MatchesPlayed or 0) > 0
 	if firstWinHint.Visible then
-		firstWinHint.Text = ("First win today: +%d bonus coins"):format(summary.FirstWinBonus)
+		firstWinHint.Text = ("First win: +%d coins"):format(summary.FirstWinBonus)
 	end
 	if not state.InBattle then
 		hudMessage.Visible = hudMessage.Visible and hudMessage.Text ~= ""

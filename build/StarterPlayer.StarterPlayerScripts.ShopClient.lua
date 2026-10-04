@@ -735,6 +735,46 @@ local function restockText()
 	return ("New cards in %dh %02dm (midnight UTC)"):format(math.floor(left / 3600), math.floor(left % 3600 / 60))
 end
 
+-- Tap a card (Singles) to see it big, with what it does
+local cardInspect = make("TextButton", {
+	Name = "ShopInspect",
+	Size = UDim2.fromScale(1, 1),
+	BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+	BackgroundTransparency = 0.2,
+	Text = "",
+	AutoButtonColor = false,
+	Visible = false,
+	ZIndex = 9,
+}, gui)
+cardInspect.Activated:Connect(function()
+	cardInspect.Visible = false
+end)
+
+local function showCardInspect(cardId, finish)
+	clear(cardInspect)
+	local big = make("Frame", {
+		Name = "BigCard",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.3, 0.47),
+		Size = UDim2.fromScale(0.45, 0.78),
+		BackgroundTransparency = 1,
+		ZIndex = 9,
+	}, cardInspect)
+	make("UIAspectRatioConstraint", { AspectRatio = 1060 / 1484 }, big)
+	CardVisuals.Draw(big, cardId, { Finish = finish })
+	CardVisuals.MakeHandheld(big)
+	CardVisuals.DrawInfoPanel(cardInspect, cardId, {
+		Position = UDim2.fromScale(0.55, 0.09),
+		Size = UDim2.fromScale(0.41, 0.74),
+		ZIndex = 10,
+		Finish = finish,
+		Owned = ("You own %d"):format(ownedCount(cardId)),
+	})
+	label(cardInspect, "InspectHint", UDim2.fromScale(0.1, 0.9), UDim2.fromScale(0.8, 0.06),
+		"Hold the card to move the light  |  tap anywhere else to close", 18, { ZIndex = 10 })
+	cardInspect.Visible = true
+end
+
 local function renderSingles()
 	if not singlesInfo or os.clock() - singlesInfo.LoadedAt > singlesInfo.RestockIn then
 		local ok, result = ask("GetSingles")
@@ -756,31 +796,46 @@ local function renderSingles()
 		{ TextXAlignment = Enum.TextXAlignment.Left, Font = Enum.Font.Gotham })
 	label(content, "Restock", UDim2.new(0.62, 0, 0, 0), UDim2.new(0.38, 0, 0, 30), restockText(), 18,
 		{ TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = GOLD })
-	local grid = make("Frame", {
+	-- big cells that scroll (tap a card to see it up close)
+	local grid = make("ScrollingFrame", {
 		Name = "SinglesGrid",
 		Position = UDim2.new(0, 0, 0, 38),
 		Size = UDim2.new(1, 0, 1, -38),
 		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 10,
+		ScrollBarImageColor3 = UiTheme.Colors.Gold,
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 	}, content)
-	local perRow = 6
+	make("UIGridLayout", {
+		CellSize = UDim2.new(0.25, -12, 0, 400),
+		CellPadding = UDim2.fromOffset(10, 10),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, grid)
+	make("UIPadding", { PaddingLeft = UDim.new(0, 4), PaddingTop = UDim.new(0, 4), PaddingRight = UDim.new(0, 14),
+		PaddingBottom = UDim.new(0, 10) }, grid)
 	for i, entry in ipairs(singlesInfo.Stock) do
 		local card = CardDatabase.GetCard(entry.CardId)
-		local row, col = math.floor((i - 1) / perRow), (i - 1) % perRow
 		local cell = make("Frame", {
 			Name = "Single_" .. entry.CardId,
-			Position = UDim2.new(col / perRow, 4, row / 2, 4),
-			Size = UDim2.new(1 / perRow, -8, 0.5, -8),
+			LayoutOrder = i,
 			BackgroundColor3 = PANEL,
 		}, grid)
 		make("UICorner", { CornerRadius = UDim.new(0, 8) }, cell)
 		UiTheme.Panel(cell, { Thickness = 12 })
-		local cardHolder = make("Frame", {
+		local cardHolder = make("TextButton", {
 			Name = "Card",
-			Position = UDim2.fromScale(0.1, 0.02),
-			Size = UDim2.fromScale(0.8, 0.6),
+			Text = "",
+			AutoButtonColor = false,
+			Position = UDim2.fromScale(0.08, 0.03),
+			Size = UDim2.fromScale(0.84, 0.59),
 			BackgroundTransparency = 1,
 		}, cell)
 		CardVisuals.Draw(cardHolder, entry.CardId, { Finish = entry.Finish })
+		cardHolder.Activated:Connect(function()
+			showCardInspect(entry.CardId, entry.Finish)
+		end)
 		label(cell, "Finish", UDim2.fromScale(0.04, 0.63), UDim2.fromScale(0.92, 0.07),
 			("%s %s"):format(CardVisuals.FinishNames[entry.Finish] or entry.Finish, card.Rarity), 14,
 			{ TextColor3 = CardVisuals.RarityColors[card.Rarity] or WHITE })

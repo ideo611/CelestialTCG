@@ -2896,7 +2896,7 @@ end
 
 -- Settings row at the bottom of the match log: sound, animation speed,
 -- and how fast the opponent's plays are shown. Saved with your cards.
-do
+;(function() -- (a function, not a do block: the main chunk is near Luau's 200-local limit)
 	local OPPONENT_ORDER = { "Slow", "Normal", "Fast" }
 	local saveSettings
 	do
@@ -2917,20 +2917,68 @@ do
 		end
 	end
 
-	local soundButton = button(root, "SoundButton", "", UDim2.fromScale(0.765, 0.452), UDim2.fromScale(0.068, 0.036),
-		TINT.Grey)
-	local speedButton = button(root, "AnimSpeedButton", "", UDim2.fromScale(0.837, 0.452), UDim2.fromScale(0.072, 0.036),
-		TINT.Grey)
-	local opponentButton = button(root, "OpponentSpeedButton", "", UDim2.fromScale(0.913, 0.452),
-		UDim2.fromScale(0.072, 0.036), TINT.Grey)
+	-- One "Settings" button under the log opens a box with the three
+	-- settings as big buttons that show their current value (three tiny
+	-- buttons were unreadable on phones).
+	local settingsButton = button(root, "SettingsButton", "Settings", UDim2.fromScale(0.76, 0.452),
+		UDim2.fromScale(0.225, 0.042), TINT.Grey)
+	local settingsFrame = make("TextButton", {
+		Name = "SettingsBox",
+		Text = "",
+		AutoButtonColor = false,
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+		BackgroundTransparency = 0.4,
+		Visible = false,
+		ZIndex = 25,
+	}, gui)
+	local settingsPanel = make("Frame", {
+		Name = "SettingsPanel",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.42, 0.56),
+		BackgroundColor3 = PANEL,
+		BorderSizePixel = 0,
+		ZIndex = 25,
+	}, settingsFrame)
+	UiAssets.FramePanel(settingsPanel)
+	make("UICorner", { CornerRadius = UDim.new(0, 12) }, settingsPanel)
+	label(settingsPanel, {
+		Name = "SettingsTitle",
+		Position = UDim2.fromScale(0.08, 0.04),
+		Size = UDim2.fromScale(0.84, 0.13),
+		ZIndex = 26,
+		TextColor3 = GOLD,
+		Text = "Battle settings",
+	})
+	local function row(name, y, tint)
+		local b = button(settingsPanel, name, "", UDim2.fromScale(0.08, y), UDim2.fromScale(0.84, 0.15), tint)
+		b.ZIndex = 26
+		b.Label.ZIndex = 27
+		return b
+	end
+	local soundButton = row("SoundButton", 0.2, TINT.Default)
+	local speedButton = row("AnimSpeedButton", 0.38, TINT.Default)
+	local opponentButton = row("OpponentSpeedButton", 0.56, TINT.Default)
+	local settingsClose = row("SettingsClose", 0.78, TINT.Grey)
+	setLabel(settingsClose, "Done")
+	settingsButton.Activated:Connect(function()
+		settingsFrame.Visible = true
+	end)
+	settingsClose.Activated:Connect(function()
+		settingsFrame.Visible = false
+	end)
+	settingsFrame.Activated:Connect(function()
+		settingsFrame.Visible = false
+	end)
 	local function refreshSettings()
 		setLabel(soundButton, soundOn and "Sound: On" or "Sound: Off")
 		for _, sp in ipairs(SPEEDS) do
 			if sp[1] == animSpeed then
-				setLabel(speedButton, "Speed: " .. sp[2])
+				setLabel(speedButton, "Animations: " .. sp[2])
 			end
 		end
-		setLabel(opponentButton, "Opponent: " .. opponentSpeed)
+		setLabel(opponentButton, "Opponent's turns: " .. opponentSpeed)
 	end
 	refreshSettings()
 	soundButton.Activated:Connect(function()
@@ -2966,7 +3014,7 @@ do
 			refreshSettings()
 		end)
 	end
-end
+end)()
 
 ---------------------------------------------------------------------
 -- Clicks

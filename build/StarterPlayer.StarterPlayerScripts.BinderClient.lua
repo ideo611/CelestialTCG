@@ -22,6 +22,7 @@ local CardDatabase = require(ReplicatedStorage:WaitForChild("CardDatabase"))
 local CardVisuals = require(ReplicatedStorage:WaitForChild("CardVisuals"))
 local UiAssets = require(ReplicatedStorage:WaitForChild("UiAssets"))
 local UiTheme = require(ReplicatedStorage:WaitForChild("UiTheme"))
+local HudDock = require(ReplicatedStorage:WaitForChild("HudDock"))
 local SoundAssets = require(ReplicatedStorage:WaitForChild("SoundAssets"))
 local remotes = ReplicatedStorage:WaitForChild("BinderRemotes")
 local request = remotes:WaitForChild("BinderRequest")
@@ -261,8 +262,11 @@ local playerGui = player:WaitForChild("PlayerGui")
 local hud = make("ScreenGui", { Name = "BinderButtonGui", ResetOnSpawn = false, DisplayOrder = 1 }, playerGui)
 local openButton = button(hud, "OpenMyBinder", "My Binder", UDim2.new(0, 10, 0.45, 52), UDim2.fromOffset(120, 44))
 local outButton = button(hud, "ToggleBinderOut", "Pull out binder", UDim2.new(0, 10, 0.45, 102), UDim2.fromOffset(120, 34), GREY)
+HudDock.Add(openButton, 40)
+HudDock.Add(outButton, 41)
 local viewersLabel = label(hud, "BinderViewers", UDim2.new(0, 136, 0.45, 102), UDim2.fromOffset(260, 34), "", 16,
 	{ TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = GOLD, TextStrokeTransparency = 0.5 })
+HudDock.Popup(viewersLabel, outButton) -- (beside "Pull out binder")
 
 local gui = make("ScreenGui", {
 	Name = "BinderGui",
@@ -280,6 +284,7 @@ local backdrop = make("Frame", {
 	BorderSizePixel = 0,
 }, gui)
 UiTheme.Backdrop(backdrop, { Seed = 31 })
+UiTheme.FitScreen(backdrop)
 local title = UiTheme.Title(label(backdrop, "BinderTitle", UDim2.new(0.03, 0, 0, 14), UDim2.new(0.45, 0, 0, 40), "", 32,
 	{ TextXAlignment = Enum.TextXAlignment.Left }))
 local subtitle = label(backdrop, "BinderStats", UDim2.new(0.03, 0, 0, 54), UDim2.new(0.45, 0, 0, 22), "", 18,

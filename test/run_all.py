@@ -172,6 +172,7 @@ RS.ShopRemotes.ShopEvent:FireClient(nik, { Kind = "OpenShop", Tab = "Packs" })
 M.run(1)
 if shopGui then
 	results.shopPacks = dump(shopGui, 1600, 900)
+	results.shopPhone = dump(shopGui, 1169, 540)
 	local solarButton = shopGui:FindFirstChild("PackType_Solar", true)
 	if solarButton then solarButton.Activated:Fire() M.run(0.5) end
 	local buy = shopGui:FindFirstChild("BuyWithCoins", true)
@@ -251,6 +252,7 @@ for _, d in ipairs(colGui and colGui:GetDescendants() or {}) do
 end
 check("deck builder: star column", starCells > 0, starCells)
 results.deckEditor = colGui and dump(colGui, 1600, 900)
+results.deckEditorPhone = colGui and dump(colGui, 1169, 540)
 local sortB = colGui and colGui:FindFirstChild("SortDeckList", true)
 check("deck builder: sort button", sortB ~= nil)
 if sortB then sortB.Activated:Fire() M.run(0.5) end
@@ -345,6 +347,7 @@ for i = 1, 10 do
 	end
 end
 results.battle = battleGui and dump(battleGui, 1600, 900)
+results.battlePhone = battleGui and dump(battleGui, 844, 390)
 check("own match keeps the spectator view closed", not pg.SpectateGui.Enabled)
 -- look at the TV from the floor
 workspace.CurrentCamera.CFrame = CFrame.new(tvs.TV1.Screen.Position + Vector3.new(0, -6, 18))
@@ -476,7 +479,7 @@ print("singles:", res.get("singlesPrices"))
 print("events seen:", res.get("eventKinds"))
 for name, size in [("mulligan", (1600, 900)), ("graveyard", (1600, 900)), ("deckEditor", (1600, 900)), ("deckEditor2", (1600, 900)), ("starterWelcome", (1600, 900)), ("starterNebula", (1600, 900)), ("shopPacks", (1600, 900)),
                    ("shopPicker", (1600, 900)), ("shopReveal", (1600, 900)), ("shopSingles", (1600, 900)),
-                   ("binder", (1600, 900)), ("binder2", (1600, 900)), ("battle", (1600, 900)), ("battle2", (1600, 900)), ("tv", (540, 300)), ("tvLive", (420, 240))]:
+                   ("binder", (1600, 900)), ("binder2", (1600, 900)), ("battle", (1600, 900)), ("battle2", (1600, 900)), ("battlePhone", (844, 390)), ("deckEditorPhone", (1169, 540)), ("shopPhone", (1169, 540)), ("tv", (540, 300)), ("tvLive", (420, 240))]:
     if res.get(name):
         render(res[name], size[0], size[1], f"{OUT}/{name}.png")
 import json

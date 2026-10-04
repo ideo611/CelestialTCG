@@ -26,6 +26,7 @@ local RunService = game:GetService("RunService")
 local CardArt = require(ReplicatedStorage:WaitForChild("CardArt"))
 local SoundAssets = require(ReplicatedStorage:WaitForChild("SoundAssets"))
 local UiTheme = require(ReplicatedStorage:WaitForChild("UiTheme"))
+local HudDock = require(ReplicatedStorage:WaitForChild("HudDock"))
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -242,6 +243,12 @@ local firstWinHint = text(gui, "FirstWinHint", UDim2.new(0, 136, 0.45, -104), UD
 	"", { TextColor3 = GOLD, TextXAlignment = Enum.TextXAlignment.Left, Visible = false })
 local hudMessage = text(gui, "GuideMessage", UDim2.new(0, 136, 0.45, -54), UDim2.fromOffset(300, 44), "",
 	{ TextColor3 = RED, TextXAlignment = Enum.TextXAlignment.Left, Visible = false })
+-- into the one HUD column (first-win reminder on top, small)
+firstWinHint.TextXAlignment = Enum.TextXAlignment.Center
+HudDock.Add(firstWinHint, 1).Size = UDim2.fromOffset(150, 34)
+HudDock.Add(playButton, 10)
+HudDock.Add(howButton, 20)
+HudDock.Add(hudMessage, 90)
 
 local function flashHud(message)
 	hudMessage.Text = message or ""

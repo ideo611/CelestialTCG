@@ -134,7 +134,7 @@ local winList = dump(view, 1600, 900)
 local battle2
 task.spawn(function() battle2 = playGame(4, 11, { "Alex", "Sam" }, 4) end)
 M.run(20)
-local listButton = pg.SpectateButtonGui.LiveGames
+local listButton = pg:FindFirstChild("LiveGames", true)
 local hudWhileWatching = pg.SpectateButtonGui.Enabled
 
 -- table resets: view goes to waiting screen

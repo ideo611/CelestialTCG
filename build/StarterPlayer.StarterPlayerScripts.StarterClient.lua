@@ -117,6 +117,7 @@ local openEvent = make("BindableEvent", { Name = "OpenStarterBrowser" }, gui)
 
 local root = make("Frame", { Name = "Root", Size = UDim2.fromScale(1, 1), BackgroundColor3 = BG, BorderSizePixel = 0 }, gui)
 UiTheme.Backdrop(root, { Seed = 41 })
+UiTheme.FitScreen(root)
 local title = UiTheme.Title(label(root, "Title", UDim2.new(0.02, 0, 0, 12), UDim2.new(0.7, 0, 0, 40), "Starter Decks", 30,
 	{ TextXAlignment = Enum.TextXAlignment.Left }))
 local closeButton = button(root, "CloseStarters", "Close", UDim2.new(0.86, 0, 0, 12), UDim2.new(0.12, 0, 0, 40), GREY)

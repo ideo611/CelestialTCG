@@ -159,6 +159,7 @@ local gui = make("ScreenGui", {
 
 local root = make("Frame", { Name = "Root", Size = UDim2.fromScale(1, 1), BackgroundColor3 = BG, BorderSizePixel = 0 }, gui)
 UiTheme.Backdrop(root)
+UiTheme.FitScreen(root)
 local TABS = { { "Packs", "Packs" }, { "Singles", "Singles" }, { "Starters", "Starter Decks" },
 	{ "Tokens", "Star Tokens" }, { "BreakDown", "Break Down" }, { "Playmats", "Playmats" } }
 local tabButtons = {}
@@ -283,6 +284,7 @@ local reveal = make("Frame", {
 	ZIndex = 6,
 }, gui)
 UiTheme.Backdrop(reveal, { Seed = 11 })
+UiTheme.FitScreen(reveal)
 local revealTitle = UiTheme.Title(label(reveal, "RevealTitle", UDim2.fromScale(0.1, 0.06), UDim2.fromScale(0.8, 0.08),
 	"Click each card to flip it", 30, { ZIndex = 6 }))
 local revealRow = make("Frame", {
@@ -469,6 +471,7 @@ local picker = make("Frame", {
 	ZIndex = 6,
 }, gui)
 UiTheme.Backdrop(picker, { Seed = 5 })
+UiTheme.FitScreen(picker)
 local pickerTitle = UiTheme.Title(label(picker, "PickerTitle", UDim2.fromScale(0.1, 0.05), UDim2.fromScale(0.8, 0.08),
 	"Pick your pack", 34, { ZIndex = 6 }))
 label(picker, "PickerNote", UDim2.fromScale(0.15, 0.13), UDim2.fromScale(0.7, 0.05),
@@ -1029,6 +1032,7 @@ local welcome = make("Frame", {
 	ZIndex = 8,
 }, toastGui)
 UiTheme.Backdrop(welcome, { Seed = 3 })
+UiTheme.FitScreen(welcome)
 UiTheme.Title(label(welcome, "WelcomeTitle", UDim2.fromScale(0.1, 0.08), UDim2.fromScale(0.8, 0.1), "Welcome, Commander!", 40,
 	{ ZIndex = 8 }))
 label(welcome, "WelcomeText", UDim2.fromScale(0.15, 0.18), UDim2.fromScale(0.7, 0.08),

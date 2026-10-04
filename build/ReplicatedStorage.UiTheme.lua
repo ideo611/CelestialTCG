@@ -335,6 +335,57 @@ function UiTheme.Backdrop(frame, options)
 	return frame
 end
 
+-- Small screens (phones): lays a full-screen menu out as if the screen were
+-- at least minWidth x minHeight, then shrinks it to fit. Menus built with
+-- fixed pixel sizes (tab bars, lists, card grids) then keep their room
+-- instead of overflowing; on a normal screen nothing changes.
+UiTheme.FitMinWidth = 1000
+UiTheme.FitMinHeight = 540
+function UiTheme.FitScreen(frame, minWidth, minHeight)
+	if not frame or frame:FindFirstChild("FitScale") then
+		return frame
+	end
+	minWidth = minWidth or UiTheme.FitMinWidth
+	minHeight = minHeight or UiTheme.FitMinHeight
+	-- (centered, so it fills the screen whichever point Roblox scales around)
+	frame.AnchorPoint = Vector2.new(0.5, 0.5)
+	frame.Position = UDim2.fromScale(0.5, 0.5)
+	local fitScale = make("UIScale", { Name = "FitScale" }, frame)
+	local function area()
+		local screen = frame.Parent
+		while screen and not screen:IsA("ScreenGui") do
+			screen = screen.Parent
+		end
+		local size
+		pcall(function()
+			size = screen and screen.AbsoluteSize
+		end)
+		if not size or size.X <= 0 then
+			local camera = workspace.CurrentCamera
+			size = camera and camera.ViewportSize
+		end
+		return size
+	end
+	local function fit()
+		local size = area()
+		if not size or size.X <= 0 or size.Y <= 0 then
+			return
+		end
+		local s = math.min(1, size.X / minWidth, size.Y / minHeight)
+		fitScale.Scale = s
+		frame.Size = UDim2.fromScale(1 / s, 1 / s)
+	end
+	fit()
+	if RunService:IsClient() then
+		local camera = workspace.CurrentCamera
+		if camera then
+			camera:GetPropertyChangedSignal("ViewportSize"):Connect(fit)
+		end
+		frame.AncestryChanged:Connect(fit)
+	end
+	return frame
+end
+
 -- A window color leaning toward a faction (or any) color
 function UiTheme.Tinted(color, amount)
 	return UiTheme.Colors.Panel:Lerp(color, amount or 0.45)

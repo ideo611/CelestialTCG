@@ -18,6 +18,7 @@ local CardDatabase = require(ReplicatedStorage:WaitForChild("CardDatabase"))
 local CardVisuals = require(ReplicatedStorage:WaitForChild("CardVisuals"))
 local UiAssets = require(ReplicatedStorage:WaitForChild("UiAssets"))
 local UiTheme = require(ReplicatedStorage:WaitForChild("UiTheme"))
+local HudDock = require(ReplicatedStorage:WaitForChild("HudDock"))
 local SoundAssets = require(ReplicatedStorage:WaitForChild("SoundAssets"))
 local remotes = ReplicatedStorage:WaitForChild("EconomyRemotes")
 local walletUpdate = remotes:WaitForChild("WalletUpdate")
@@ -211,7 +212,7 @@ local FINISH_COLORS = {
 local openGui = make("ScreenGui", { Name = "CardsButtonGui", ResetOnSpawn = false, DisplayOrder = 1,
 	ZIndexBehavior = Enum.ZIndexBehavior.Sibling },
 player:WaitForChild("PlayerGui"))
-local openButton = button(openGui, "OpenCollection", "My Cards", UDim2.new(0, 10, 0.45, 0), UDim2.fromOffset(120, 44))
+local openButton = HudDock.Add(button(openGui, "OpenCollection", "My Cards", UDim2.new(0, 10, 0.45, 0), UDim2.fromOffset(120, 44)), 30)
 
 local gui = make("ScreenGui", {
 	Name = "CollectionGui",
@@ -223,6 +224,7 @@ local gui = make("ScreenGui", {
 }, player.PlayerGui)
 local root = make("Frame", { Name = "Root", Size = UDim2.fromScale(1, 1), BackgroundColor3 = BG, BorderSizePixel = 0 }, gui)
 UiTheme.Backdrop(root, { Seed = 21 })
+UiTheme.FitScreen(root)
 
 local collectionTab = button(root, "CollectionTab", "Collection", UDim2.new(0.02, 0, 0, 12), UDim2.new(0.14, 0, 0, 40))
 local decksTab = button(root, "DecksTab", "Decks", UDim2.new(0.17, 0, 0, 12), UDim2.new(0.12, 0, 0, 40))

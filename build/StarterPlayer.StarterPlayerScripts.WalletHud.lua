@@ -139,14 +139,48 @@ if not RunService:IsStudio() then
 	return
 end
 
+-- folded away behind a small "Test tools" tab so it doesn't cover the
+-- screen (on a phone-sized test window it took up half of it)
+local devToggle = make("TextButton", {
+	Name = "DevToggle",
+	AnchorPoint = Vector2.new(1, 0),
+	Position = UDim2.new(1, -10, 0, 78),
+	Size = UDim2.fromOffset(110, 24),
+	BackgroundColor3 = Color3.fromRGB(90, 50, 50),
+	BackgroundTransparency = 0.15,
+	TextColor3 = WHITE,
+	Font = Enum.Font.GothamBold,
+	TextSize = 12,
+	Text = "Test tools  v",
+}, gui)
+make("UICorner", { CornerRadius = UDim.new(0, 6) }, devToggle)
 local panel = make("Frame", {
 	Name = "DevPanel",
 	AnchorPoint = Vector2.new(1, 0),
-	Position = UDim2.new(1, -10, 0, 78),
+	Position = UDim2.new(1, -10, 0, 106),
 	Size = UDim2.fromOffset(340, 150),
 	BackgroundColor3 = Color3.fromRGB(40, 20, 20),
 	BackgroundTransparency = 0.1,
+	Visible = false,
 }, gui)
+devToggle.Activated:Connect(function()
+	panel.Visible = not panel.Visible
+	devToggle.Text = panel.Visible and "Test tools  ^" or "Test tools  v"
+end)
+task.spawn(function()
+	local battleGui = player.PlayerGui:WaitForChild("BattleGui", 10)
+	if battleGui then
+		local function sync()
+			devToggle.Visible = not battleGui.Enabled
+			if battleGui.Enabled then
+				panel.Visible = false
+				devToggle.Text = "Test tools  v"
+			end
+		end
+		sync()
+		battleGui:GetPropertyChangedSignal("Enabled"):Connect(sync)
+	end
+end)
 make("UICorner", { CornerRadius = UDim.new(0, 8) }, panel)
 make("TextLabel", {
 	Name = "DevTitle",

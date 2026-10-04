@@ -23,6 +23,7 @@ local CardDatabase = require(ReplicatedStorage:WaitForChild("CardDatabase"))
 local CardVisuals = require(ReplicatedStorage:WaitForChild("CardVisuals"))
 local UiAssets = require(ReplicatedStorage:WaitForChild("UiAssets"))
 local UiTheme = require(ReplicatedStorage:WaitForChild("UiTheme"))
+local HudDock = require(ReplicatedStorage:WaitForChild("HudDock"))
 local okMats, Playmats = pcall(function()
 	return require(ReplicatedStorage:WaitForChild("Playmats", 10))
 end)
@@ -544,6 +545,7 @@ end
 ---------------------------------------------------------------------
 local hud = make("ScreenGui", { Name = "SpectateButtonGui", ResetOnSpawn = false, DisplayOrder = 1 }, playerGui)
 local liveButton = button(hud, "LiveGames", "Live games", UDim2.new(0, 10, 0.45, 146), UDim2.fromOffset(120, 34), RED)
+HudDock.Add(liveButton, 60)
 local listFrame = make("Frame", {
 	Name = "LiveList",
 	Position = UDim2.new(0, 136, 0.45, 146),
@@ -553,6 +555,7 @@ local listFrame = make("Frame", {
 }, hud)
 corner(listFrame)
 UiTheme.Panel(listFrame, { Thickness = 12 })
+HudDock.Popup(listFrame, liveButton) -- (opens beside the button)
 
 renderList = function()
 	clear(listFrame)
@@ -583,6 +586,7 @@ refreshHud = function()
 	liveButton.Text = count > 0 and ("Live games (%d)"):format(count) or "Live games"
 	liveButton.BackgroundColor3 = count > 0 and RED or GREY
 	hud.Enabled = not inMatch and watchingIndex == nil
+	liveButton.Visible = hud.Enabled -- (the button lives in the HUD column)
 	if listFrame.Visible then
 		renderList()
 	end

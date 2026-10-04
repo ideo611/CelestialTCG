@@ -20,7 +20,7 @@ EconomyConfig.StartingCoins = 100      -- new players can open one pack right aw
 -- PLAYTEST: every player is topped up to this many coins once (new and
 -- returning players alike), so testers can try packs, singles and mats.
 -- Set to 0 before the real launch.
-EconomyConfig.PlaytestCoins = 5000
+EconomyConfig.PlaytestCoins = 0 -- LAUNCH: no test coins (was 5000 for playtesting)
 
 -- Starter decks: a new player's first one is free, the rest cost coins
 EconomyConfig.StarterDeckPriceCoins = 300
@@ -30,6 +30,10 @@ EconomyConfig.StarterDeckPriceCoins = 300
 -- ArePaidRandomItemsRestricted) are blocked from buying packs with coins.
 -- They can still earn packs through Star Shards.
 EconomyConfig.CoinsSoldForRobux = false
+
+-- First win of each day (UTC) pays this bonus on top of the match reward.
+-- It doesn't count toward the daily cap. (Planned: becomes a Booster Pack Ticket.)
+EconomyConfig.FirstWinBonusCoins = 50
 
 EconomyConfig.MatchRewards = {
 	PvPWin = 50,

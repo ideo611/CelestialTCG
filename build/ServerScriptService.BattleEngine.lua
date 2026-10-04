@@ -10,6 +10,11 @@
 	    true, events      -- it worked; events describe what happened
 	    false, message    -- it was refused; nothing changed
 
+	Config: BattleEngine.new({ Decks = { deck1, deck2 }, FirstPlayer?, Seed?, Mulligan? })
+	    Scripted = { [seat] = { HP?, StartingEnergy?, HandSize?, CelestialDiscount? } }
+	    makes a scripted match (the tutorial): decks aren't checked or shuffled
+	    (cards are drawn in the listed order) and nobody gets the Spark.
+
 	Actions:
 	    battle:PlayCard(seat, handIndex, { Lane = 1-3 })                    -- a unit
 	    battle:PlayCard(seat, handIndex, { Target = { Side = "Self"/"Enemy", Lane = 1-3 } })  -- a spell
@@ -110,18 +115,31 @@ function BattleEngine.new(config)
 	for seat = 1, 2 do
 		local deckConfig = config.Decks[seat]
 		assert(deckConfig, "Missing deck for seat " .. seat)
-		local ok, errors = CardDatabase.ValidateDeck(deckConfig.Commander, deckConfig.Celestial, deckConfig.Cards, deckConfig.Format)
-		if not ok then
-			error(("Seat %d deck is illegal: %s"):format(seat, table.concat(errors, " ")))
+		if not config.Scripted then
+			local ok, errors = CardDatabase.ValidateDeck(deckConfig.Commander, deckConfig.Celestial, deckConfig.Cards, deckConfig.Format)
+			if not ok then
+				error(("Seat %d deck is illegal: %s"):format(seat, table.concat(errors, " ")))
+			end
 		end
 
 		local deck = copyList(deckConfig.Cards)
-		shuffle(deck, self.Rng)
+		if config.Scripted then
+			-- scripted match (the tutorial): cards are drawn in the listed order
+			local reversed = {}
+			for i = #deck, 1, -1 do
+				table.insert(reversed, deck[i])
+			end
+			deck = reversed
+		else
+			shuffle(deck, self.Rng)
+		end
+		local scripted = config.Scripted and config.Scripted[seat] or {}
 
 		self.Players[seat] = {
 			CommanderId = deckConfig.Commander,
-			HP = Rules.CommanderHP,
-			MaxEnergy = Rules.StartingEnergy - 1, -- goes up by 1 when the first turn starts
+			HP = scripted.HP or Rules.CommanderHP,
+			MaxEnergy = (scripted.StartingEnergy or Rules.StartingEnergy) - 1, -- goes up by 1 when the first turn starts
+			CelestialDiscount = scripted.CelestialDiscount or 0,
 			Energy = 0,
 			Deck = deck,
 			Hand = {},
@@ -151,12 +169,15 @@ function BattleEngine.new(config)
 	for seat = 1, 2 do
 		self.Players[seat].MaxHP = self.Players[seat].HP -- healing can't go above the starting HP
 	end
-	self.Players[second].HasSpark = Rules.SecondPlayerSpark == true
+	self.Players[second].HasSpark = Rules.SecondPlayerSpark == true and not config.Scripted
 
 	for seat = 1, 2 do
 		local handSize = Rules.StartingHand
 		if seat == second then
 			handSize = handSize + (Rules.SecondPlayerBonusCards or 0)
+		end
+		if config.Scripted and config.Scripted[seat] and config.Scripted[seat].HandSize then
+			handSize = config.Scripted[seat].HandSize
 		end
 		for _ = 1, handSize do
 			self:_draw(seat)
@@ -1037,7 +1058,7 @@ end
 function Battle:GetCelestialCost(seat)
 	local player = self.Players[seat]
 	local card = CardDatabase.GetCard(player.StarGate.CardId)
-	return card.EnergyCost + Rules.CelestialTax * player.StarGate.TimesReturned
+	return math.max(0, card.EnergyCost + Rules.CelestialTax * player.StarGate.TimesReturned - (player.CelestialDiscount or 0))
 end
 
 function Battle:PlayCard(seat, handIndex, options)

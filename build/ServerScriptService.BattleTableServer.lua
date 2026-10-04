@@ -26,6 +26,8 @@ local PlayerData = require(ServerScriptService:WaitForChild("PlayerData"))
 local Building = require(ServerScriptService:WaitForChild("CardShopBuilding"))
 local MatchLog = require(ServerScriptService:WaitForChild("MatchLog"))
 local Spectate = require(ServerScriptService:WaitForChild("Spectate"))
+local Analytics = require(ServerScriptService:WaitForChild("Analytics"))
+local RateLimit = require(ServerScriptService:WaitForChild("RateLimit"))
 
 local BOT = "BOT"
 local BOT_ACTION_DELAY = 0.8 -- seconds between bot plays, so you can follow along
@@ -37,6 +39,31 @@ local SEAT_COLOR = Color3.fromRGB(90, 70, 160)
 local RESET_DELAY = 8        -- seconds the result stays up before the table resets
 local NEXT_GAME_DELAY = 6    -- seconds between games in a series
 local FORMATS = { [1] = true, [3] = true, [5] = true } -- best of 1, 3 or 5
+-- Turn timer (player vs player only): a turn left this long ends by itself.
+-- Timing out this many turns in a row forfeits the game.
+local TURN_SECONDS = 60
+local MAX_TIMEOUTS = 3
+
+-- The tutorial match: Captain Sol Varro (you) against Tidekeeper Selene.
+-- Cards are drawn in the order listed (opening hand first). Selene starts low
+-- on HP and can't summon her Celestial; your Celestial is discounted so it
+-- arrives on your 4th turn.
+local TUTORIAL = {
+	Decks = {
+		{ Commander = "CMD-SOL-01", Celestial = "CEL-04", Format = "Open", Cards = {
+			"SOL-003", "SOL-003", "SOL-018", "SOL-003",          -- opening hand
+			"SOL-018", "SOL-003", "SOL-018", "SOL-007", "SOL-018", "SOL-003", "SOL-007", "SOL-018",
+		} },
+		{ Commander = "CMD-LUN-01", Celestial = "CEL-05", Format = "Open", Cards = {
+			"LUN-004", "LUN-001", "LUN-004",                     -- opening hand
+			"LUN-004", "LUN-001", "LUN-004", "LUN-001", "LUN-004", "LUN-001", "LUN-004",
+		} },
+	},
+	Scripted = {
+		{ StartingEnergy = 2, CelestialDiscount = 2, HandSize = 4 },
+		{ HP = 12, CelestialDiscount = -20, HandSize = 3 },
+	},
+}
 
 -- The finish each card in a player's deck shows: the one picked in the deck
 -- builder (saved decks), otherwise the shiniest copy they own. { [cardId] = finish }
@@ -98,7 +125,22 @@ local function tableOf(player)
 	return nil
 end
 
-local function createTable(index, position, parent)
+-- options (optional): { Virtual = true } makes an off-table match (practice
+-- or the tutorial) with no furniture, no TV and no table number, so it never
+-- takes one of the shop's tables. Tutorial = true runs the tutorial match.
+-- OnClosed() is called when a virtual match closes.
+local function createTable(index, position, parent, options)
+	options = options or {}
+	local self = {}
+	local virtual = options.Virtual == true
+	local tutorial = options.Tutorial == true
+	local PAD_POSITIONS, seatPrompts, practicePrompt, signLabel
+	if virtual then
+		PAD_POSITIONS = {}
+		seatPrompts = { { Enabled = false }, { Enabled = false } }
+		practicePrompt = { Enabled = false }
+		signLabel = { Text = "" }
+	else
 	local model = Instance.new("Model")
 	model.Name = "Table" .. index
 
@@ -128,7 +170,7 @@ local function createTable(index, position, parent)
 	makePart("DeckBox", Vector3.new(0.7, 0.5, 0.9), Vector3.new(3.6, 3.83, 1.6), Color3.fromRGB(230, 120, 40))
 	makePart("DeckBox", Vector3.new(0.7, 0.5, 0.9), Vector3.new(-3.6, 3.83, -1.6), Color3.fromRGB(80, 120, 220))
 
-	local PAD_POSITIONS = {
+	PAD_POSITIONS = {
 		position + Vector3.new(0, 0.1, 6),
 		position + Vector3.new(0, 0.1, -6),
 	}
@@ -150,11 +192,11 @@ local function createTable(index, position, parent)
 		return prompt
 	end
 
-	local seatPrompts = {
+	seatPrompts = {
 		addPrompt(pads[1], "SeatPrompt", "Sit down", ("Table %d, seat 1"):format(index)),
 		addPrompt(pads[2], "SeatPrompt", "Sit down", ("Table %d, seat 2"):format(index)),
 	}
-	local practicePrompt = addPrompt(tableTop, "PracticePrompt", "Practice vs Bot", ("Table %d"):format(index))
+	practicePrompt = addPrompt(tableTop, "PracticePrompt", "Practice vs Bot", ("Table %d"):format(index))
 
 	-- Floating sign above the table: its number and what's happening there
 	local sign = Instance.new("BillboardGui")
@@ -173,7 +215,7 @@ local function createTable(index, position, parent)
 	numberLabel.TextStrokeTransparency = 0.3
 	numberLabel.Text = "TABLE " .. index
 	numberLabel.Parent = sign
-	local signLabel = Instance.new("TextLabel")
+	signLabel = Instance.new("TextLabel")
 	signLabel.Name = "StatusText"
 	signLabel.Position = UDim2.fromScale(0, 0.4)
 	signLabel.Size = UDim2.fromScale(1, 0.6)
@@ -187,6 +229,7 @@ local function createTable(index, position, parent)
 	sign.Parent = tableTop
 
 	model.Parent = parent
+	end -- (physical table)
 
 	---------------------------------------------------------------------
 	-- Match state for this table
@@ -202,6 +245,10 @@ local function createTable(index, position, parent)
 		LogPlayers = {},   -- who played this game, for the match log (kept even if they leave)
 		LogExperience = {},
 		LeftSeat = nil,    -- set when a player leaves mid-game
+		Timeouts = { 0, 0 },  -- turns in a row each seat let the timer run out
+		TimerTurn = nil,      -- the turn the timer is running for
+		TurnEndsAt = nil,     -- os.clock() when the current turn times out (PvP only)
+		StartedAt = nil,      -- os.clock() when the current game started
 	}
 
 	local function isHuman(occupant)
@@ -258,11 +305,36 @@ local function createTable(index, position, parent)
 		return names
 	end
 
+	local onTimeout -- defined below
+	local leaveSeat -- defined below
+
+	-- Starts the turn timer when a new PvP turn begins (safe to call any time)
+	local function scheduleTimer()
+		local battle = match.Battle
+		local pvp = isHuman(match.Seats[1]) and isHuman(match.Seats[2])
+		if not battle or battle.Winner or battle.Phase == "Mulligan" or not pvp then
+			match.TurnEndsAt = nil
+			return
+		end
+		if match.TimerTurn == battle.Turn then
+			return
+		end
+		match.TimerTurn = battle.Turn
+		match.TurnEndsAt = os.clock() + TURN_SECONDS
+		local turn, seat = battle.Turn, battle.Current
+		task.delay(TURN_SECONDS, function()
+			if match.Battle == battle and not battle.Winner and battle.Turn == turn and battle.Current == seat then
+				onTimeout(battle, seat)
+			end
+		end)
+	end
+
 	local function sendMatchUpdate(events)
 		local battle = match.Battle
 		if not battle then
 			return
 		end
+		scheduleTimer()
 		local names = seatNames()
 		for seat = 1, 2 do
 			local occupant = match.Seats[seat]
@@ -288,10 +360,16 @@ local function createTable(index, position, parent)
 					Finishes = finishes,
 					State = state,
 					Events = BattleEngine.FilterEvents(events or {}, seat),
+					TurnEndsIn = match.TurnEndsAt and math.max(0, match.TurnEndsAt - os.clock()) or nil,
+					TurnSeconds = match.TurnEndsAt and TURN_SECONDS or nil,
+					Tutorial = tutorial or nil,
 				})
 			end
 		end
 		-- the TV above the table and everyone watching (they see only what's on the table)
+		if virtual then
+			return
+		end
 		local onTable = battle:GetState(0)
 		Spectate.Update(index, battle, {
 			Names = names,
@@ -322,8 +400,15 @@ local function createTable(index, position, parent)
 		match.Series = nil
 		match.Battle = nil
 		match.Over = false
+		match.TurnEndsAt = nil
 		refreshTable()
-		Spectate.Closed(index)
+		if virtual then
+			if options.OnClosed then
+				options.OnClosed()
+			end
+		else
+			Spectate.Closed(index)
+		end
 	end
 
 	local afterAction
@@ -349,10 +434,34 @@ local function createTable(index, position, parent)
 			return
 		end
 		if battle.Winner then
+			if not match.Over and tutorial then
+				-- The tutorial: no coins or records; it counts as done either way
+				match.Over = true
+				local player = match.Seats[1]
+				if isHuman(player) then
+					local won = battle.Winner == 1
+					PlayerData.SetTutorialDone(player, false)
+					Analytics.Onboarding(player, "tutorial_finished", "completed")
+					Analytics.Event(player, "tutorial_completed", won and "won" or "lost",
+						math.floor(os.clock() - (match.StartedAt or os.clock())))
+					send(player, { Kind = "TutorialDone", Won = won })
+				end
+				task.delay(RESET_DELAY, function()
+					if match.Battle == battle then
+						resetTable()
+					end
+				end)
+				return
+			end
 			if not match.Over then
 				match.Over = true
 				-- Coins and win/loss records (per game) for everyone still at the table
 				local vsBot = match.Seats[1] == BOT or match.Seats[2] == BOT
+				local duration = os.clock() - (match.StartedAt or os.clock())
+				local devices = {}
+				for seat = 1, 2 do
+					devices[seat] = match.LogPlayers[seat] and Analytics.DeviceOf(match.LogPlayers[seat]) or nil
+				end
 				MatchLog.Record({
 					Battle = battle,
 					Decks = match.LogDecks,
@@ -362,13 +471,25 @@ local function createTable(index, position, parent)
 					BestOf = match.Series and match.Series.BestOf or 1,
 					Game = match.Series and match.Series.Game or 1,
 					Left = match.LeftSeat,
-					Table = index,
+					Table = (not virtual) and index or nil,
+					Duration = duration,
+					Devices = devices,
+					TimedOut = { match.Timeouts[1], match.Timeouts[2] },
 				})
 				for seat = 1, 2 do
 					local occupant = match.Seats[seat]
 					if isHuman(occupant) then
-						local coins = PlayerData.RecordMatch(occupant, battle.Winner == seat, vsBot, battle.Turn)
-						send(occupant, { Kind = "Reward", Coins = coins })
+						local won = battle.Winner == seat
+						local coins, bonus = PlayerData.RecordMatch(occupant, won, vsBot, battle.Turn)
+						local data = PlayerData.Get(occupant)
+						local played = data and (data.Stats.Wins + data.Stats.Losses) or 0
+						send(occupant, { Kind = "Reward", Coins = coins, Bonus = bonus or 0, VsBot = vsBot,
+							Won = won, MatchesPlayed = played })
+						Analytics.Event(occupant, vsBot and "practice_match_completed" or "pvp_match_completed",
+							won and "won" or "lost", math.floor(duration))
+						if played == 1 then
+							Analytics.Onboarding(occupant, "first_match_completed", vsBot and "bot" or "pvp")
+						end
 					end
 				end
 				local series = match.Series
@@ -409,6 +530,35 @@ local function createTable(index, position, parent)
 		end
 	end
 
+	-- A turn ran out (PvP): the turn ends by itself. Too many in a row and the
+	-- player is out of the match (like leaving the table).
+	onTimeout = function(battle, seat)
+		match.Timeouts[seat] = match.Timeouts[seat] + 1
+		local timedOut = match.Seats[seat]
+		local forfeit = match.Timeouts[seat] >= MAX_TIMEOUTS
+		for s2 = 1, 2 do
+			if isHuman(match.Seats[s2]) then
+				send(match.Seats[s2], { Kind = "TurnTimeout", Seat = s2 == seat and "You" or "Opponent",
+					Count = match.Timeouts[seat], Max = MAX_TIMEOUTS, Forfeit = forfeit })
+			end
+		end
+		if isHuman(timedOut) then
+			Analytics.Event(timedOut, "turn_timeout", forfeit and "forfeit" or tostring(match.Timeouts[seat]))
+		end
+		if forfeit then
+			if isHuman(timedOut) then
+				leaveSeat(timedOut, seat)
+				send(timedOut, { Kind = "Closed" })
+			end
+			return
+		end
+		local ok, events = battle:EndTurn(seat)
+		if ok then
+			sendMatchUpdate(events)
+			afterAction()
+		end
+	end
+
 	local function buildDeck(name)
 		-- Prototype: starter decks only, until collections exist
 		local starter = CardDatabase.StarterDecks[name]
@@ -446,10 +596,33 @@ local function createTable(index, position, parent)
 				match.LogExperience[seat] = stats and (stats.Wins + stats.Losses) or 0
 			end
 		end
-		local battle = BattleEngine.new({ Decks = { match.Decks[1], match.Decks[2] }, FirstPlayer = firstPlayer,
-			Mulligan = true })
+		local battle = BattleEngine.new({ Decks = { match.Decks[1], match.Decks[2] },
+			FirstPlayer = tutorial and 1 or firstPlayer,
+			Mulligan = not tutorial,
+			Scripted = tutorial and TUTORIAL.Scripted or nil })
 		match.Battle = battle
 		match.Over = false
+		match.StartedAt = os.clock()
+		match.Timeouts = { 0, 0 }
+		match.TimerTurn = nil
+		match.TurnEndsAt = nil
+		if not tutorial then
+			local vsBot = match.Seats[1] == BOT or match.Seats[2] == BOT
+			for seat = 1, 2 do
+				local occupant = match.Seats[seat]
+				if isHuman(occupant) then
+					local n = PlayerData.NoteMatchStarted(occupant)
+					local commander = CardDatabase.GetCard(match.Decks[seat].Commander)
+					Analytics.Event(occupant, vsBot and "practice_match_started" or "pvp_match_started",
+						commander and commander.Faction)
+					if n == 1 then
+						Analytics.Onboarding(occupant, "first_match_started", vsBot and "bot" or "pvp")
+					elseif n == 2 then
+						Analytics.Onboarding(occupant, "second_match_started", vsBot and "bot" or "pvp")
+					end
+				end
+			end
+		end
 		refreshTable()
 		sendMatchUpdate(battle:TakeStartEvents())
 		-- Starting hands: the bot chooses right away; anyone who hasn't chosen
@@ -516,6 +689,9 @@ local function createTable(index, position, parent)
 	end
 
 	local function moveToPad(player, seat)
+		if virtual then
+			return
+		end
 		local character = player.Character
 		local root = character and character:FindFirstChild("HumanoidRootPart")
 		if root then
@@ -604,7 +780,7 @@ local function createTable(index, position, parent)
 	end
 
 	-- A player gets up: leaving mid-match counts as conceding
-	local function leaveSeat(player, seat)
+	leaveSeat = function(player, seat)
 		match.Seats[seat] = nil
 		match.Decks[seat] = nil
 		local battle = match.Battle
@@ -646,7 +822,7 @@ local function createTable(index, position, parent)
 	---------------------------------------------------------------------
 	-- Sitting down
 	---------------------------------------------------------------------
-	for seat = 1, 2 do
+	for seat = 1, virtual and 0 or 2 do
 		seatPrompts[seat].Triggered:Connect(function(player)
 			if match.Battle or match.Seats[seat] or tableOf(player) then
 				return
@@ -658,16 +834,36 @@ local function createTable(index, position, parent)
 		end)
 	end
 
-	practicePrompt.Triggered:Connect(function(player)
-		if match.Battle or match.Seats[1] or match.Seats[2] or tableOf(player) then
-			return
+	local function startPractice(player)
+		if match.Battle or match.Seats[1] or match.Seats[2] or (tableOf(player) and tableOf(player) ~= self) then
+			return false
 		end
 		match.Seats[1] = player
 		match.Seats[2] = BOT
 		moveToPad(player, 1)
 		refreshTable()
 		sendDeckChoice(player)
-	end)
+		return true
+	end
+	if not virtual then
+		practicePrompt.Triggered:Connect(startPractice)
+	end
+
+	-- The tutorial: straight into the scripted match (no deck choice, no mulligan)
+	local function startTutorial(player)
+		match.Seats[1] = player
+		match.Seats[2] = BOT
+		for seat = 1, 2 do
+			local deck = TUTORIAL.Decks[seat]
+			match.Decks[seat] = { Commander = deck.Commander, Celestial = deck.Celestial, Cards = table.clone and
+				table.clone(deck.Cards) or { table.unpack(deck.Cards) }, Format = deck.Format }
+			match.Votes[seat] = 1
+		end
+		match.Finishes[1] = bestFinishes(player, match.Decks[1])
+		send(player, { Kind = "Waiting", Message = "Starting the tutorial..." })
+		startMatch()
+		return true
+	end
 
 	---------------------------------------------------------------------
 	-- Actions from players (never trusted: checked here and by the engine)
@@ -704,8 +900,24 @@ local function createTable(index, position, parent)
 		end
 
 		if action.Kind == "Leave" then
+			if tutorial and match.Battle and not match.Battle.Winner then
+				Analytics.Event(player, "tutorial_left", tostring(math.ceil(match.Battle.Turn / 2)))
+			end
 			leaveSeat(player, seat)
 			send(player, { Kind = "Closed" })
+			if virtual then
+				resetTable()
+			end
+			return
+		end
+
+		-- The tutorial's steps, for the "Tutorial" analytics funnel
+		if action.Kind == "TutorialStep" then
+			local step = toInt(action.Step)
+			if tutorial and step and step >= 1 and step <= 30 and type(action.Name) == "string" then
+				match.TutorialSession = match.TutorialSession or (tostring(player.UserId) .. "-" .. tostring(os.time()))
+				Analytics.Funnel(player, "Tutorial", match.TutorialSession, step, action.Name:sub(1, 40))
+			end
 			return
 		end
 
@@ -761,6 +973,9 @@ local function createTable(index, position, parent)
 			ok, result = battle:UseSpark(seat)
 		elseif kind == "EndTurn" then
 			ok, result = battle:EndTurn(seat)
+			if ok then
+				match.Timeouts[seat] = 0
+			end
 		elseif kind == "Mulligan" then
 			local picks = {}
 			if type(action.Indexes) == "table" then
@@ -784,20 +999,94 @@ local function createTable(index, position, parent)
 		end
 	end
 
-	return {
-		Index = index,
-		SeatOf = seatOf,
-		HandleAction = handleAction,
-		Leave = leaveSeat,
-		Refresh = refreshTable,
-	}
+	self.Index = index
+	self.Virtual = virtual
+	self.SeatOf = seatOf
+	self.HandleAction = handleAction
+	self.Leave = leaveSeat
+	self.Refresh = refreshTable
+	self.StartPractice = startPractice
+	self.StartTutorial = startTutorial
+	self.Close = resetTable
+	return self
 end
 
 for index, position in ipairs(Building.TablePositions) do
 	tables[index] = createTable(index, position, Building.Model)
 end
 
+---------------------------------------------------------------------
+-- Off-table matches: practice vs the bot from anywhere (the "Play" button)
+-- and the tutorial. They don't use one of the shop's tables, so the bot
+-- never blocks a table that two players could use.
+---------------------------------------------------------------------
+local nextVirtual = 1000
+local function newVirtualTable(isTutorial)
+	nextVirtual = nextVirtual + 1
+	local t
+	t = createTable(nextVirtual, nil, nil, {
+		Virtual = true,
+		Tutorial = isTutorial,
+		OnClosed = function()
+			for i, other in ipairs(tables) do
+				if other == t then
+					table.remove(tables, i)
+					break
+				end
+			end
+		end,
+	})
+	table.insert(tables, t)
+	return t
+end
+
+local playRequest = Instance.new("RemoteFunction")
+playRequest.Name = "PlayRequest"
+playRequest.Parent = remotes
+
+playRequest.OnServerInvoke = function(player, kind)
+	if not RateLimit.Allow(player, "Play", 4, 3) then
+		return false, "One moment..."
+	end
+	if not PlayerData.IsLoaded(player) then
+		return false, "Your cards haven't loaded yet."
+	end
+	local data = PlayerData.Get(player)
+	if kind == "SkipTutorial" then
+		if data and not data.Onboarding.TutorialDone then
+			PlayerData.SetTutorialDone(player, true)
+			Analytics.Onboarding(player, "tutorial_finished", "skipped")
+			Analytics.Event(player, "tutorial_skipped")
+		end
+		return true
+	end
+	if tableOf(player) then
+		return false, "You're already in a match. Leave it first."
+	end
+	if kind == "StartTutorial" then
+		Analytics.Onboarding(player, "tutorial_started")
+		Analytics.Event(player, "tutorial_started", data and data.Onboarding.TutorialDone and "replay" or "first")
+		local t = newVirtualTable(true)
+		t.StartTutorial(player)
+		return true
+	elseif kind == "Practice" then
+		if not data or next(data.OwnedStarters) == nil and #data.Decks == 0 then
+			return false, "Claim a starter deck first (the starter deck table in the shop)."
+		end
+		local t = newVirtualTable(false)
+		if not t.StartPractice(player) then
+			t.Close()
+			return false, "Couldn't start a match right now."
+		end
+		return true
+	end
+	return false, "Unknown request."
+end
+
 actionRemote.OnServerEvent:Connect(function(player, action)
+	if not RateLimit.Allow(player, "BattleAction", 25, 5) then
+		return
+	end
 	local t = tableOf(player)
 	if t then
 		t.HandleAction(player, action)
@@ -808,6 +1097,9 @@ Players.PlayerRemoving:Connect(function(player)
 	local t = tableOf(player)
 	if t then
 		t.Leave(player, t.SeatOf(player))
+		if t.Virtual then
+			t.Close()
+		end
 	end
 end)
 

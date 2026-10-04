@@ -191,6 +191,7 @@ local ENUMS = {
 	LineJoinMode = { "Round", "Bevel", "Miter" },
 	ResamplerMode = { "Default", "Pixelated" },
 	UserInputType = { "MouseButton1", "MouseButton2", "Touch", "Keyboard", "MouseMovement", "MouseWheel", "Gamepad1" },
+	AnalyticsCustomFieldKeys = { "CustomField01", "CustomField02", "CustomField03" },
 	-- open lists (any name accepted)
 	Font = false, KeyCode = false, Material = false,
 }
@@ -401,9 +402,9 @@ local CLASSES = {
 	-- services / special
 	Player = merge(BASE, { "DisplayName", "UserId", "Character" }),
 	PlayerGui = merge(BASE),
-	Camera = merge(BASE, { "CFrame", "FieldOfView", "CameraType" }),
+	Camera = merge(BASE, { "CFrame", "FieldOfView", "CameraType", "ViewportSize" }),
 	Workspace = merge(BASE, { "CurrentCamera" }),
-	Service = merge(BASE),
+	Service = merge(BASE, { "TouchEnabled", "KeyboardEnabled", "GamepadEnabled", "MouseEnabled" }),
 }
 -- defaults that scripts read back
 local DEFAULTS = {
@@ -652,6 +653,10 @@ function Instance.new(className, parent)
 	return self
 end
 M.isInstance = isInstance
+-- A second player sending to the server (tests): M.fireAs(player, remoteEvent, ...)
+function M.fireAs(player, remote, ...)
+	remote.OnServerEvent:Fire(player, ...)
+end
 
 -- What Roblox can't send through a remote: mixed or holey arrays, functions, etc.
 M.remoteLog = {}
@@ -702,6 +707,7 @@ rawset(workspace, "__methods", {
 })
 local camera = Instance.new("Camera")
 camera.CFrame = CFrame.new(0, 10, 0)
+camera.ViewportSize = Vector2.new(1600, 900)
 camera.Parent = workspace
 workspace.CurrentCamera = camera
 Workspace = workspace
@@ -784,7 +790,10 @@ local uis = service("UserInputService")
 rawget(uis, "__events").InputBegan = Signal.new()
 rawget(uis, "__events").InputEnded = Signal.new()
 rawget(uis, "__events").InputChanged = Signal.new()
-rawget(uis, "__events").TouchEnabled = nil
+uis.TouchEnabled = false
+uis.KeyboardEnabled = true
+uis.GamepadEnabled = false
+uis.MouseEnabled = true
 services.UserInputService = uis
 
 local tweenService = service("TweenService")
@@ -840,6 +849,26 @@ services.ReplicatedFirst = replicatedFirst
 local contentProvider = service("ContentProvider")
 rawset(contentProvider, "__methods", { PreloadAsync = function() end })
 services.ContentProvider = contentProvider
+
+-- AnalyticsService: records every call so tests can check the funnel
+M.analyticsLog = {}
+local analyticsService = service("AnalyticsService")
+local function logAnalytics(kind)
+	return function(_, player, ...)
+		table.insert(M.analyticsLog, { Kind = kind, Player = player and player.Name, Args = { ... } })
+	end
+end
+rawset(analyticsService, "__methods", {
+	LogCustomEvent = logAnalytics("Custom"),
+	LogOnboardingFunnelStepEvent = logAnalytics("Onboarding"),
+	LogFunnelStepEvent = logAnalytics("Funnel"),
+	LogEconomyEvent = logAnalytics("Economy"),
+	LogProgressionEvent = logAnalytics("Progression"),
+})
+services.AnalyticsService = analyticsService
+local scriptContext = service("ScriptContext")
+rawget(scriptContext, "__events").Error = Signal.new()
+services.ScriptContext = scriptContext
 
 local httpService = service("HttpService")
 rawset(httpService, "__methods", { GenerateGUID = function() return tostring(math.random(1e9)) end })

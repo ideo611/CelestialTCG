@@ -16,6 +16,8 @@ local TextService = game:GetService("TextService")
 
 local Packs = require(ReplicatedStorage:WaitForChild("Packs"))
 local PlayerData = require(ServerScriptService:WaitForChild("PlayerData"))
+local RateLimit = require(ServerScriptService:WaitForChild("RateLimit"))
+local Analytics = require(ServerScriptService:WaitForChild("Analytics"))
 
 local AUTOSAVE_SECONDS = 180
 
@@ -139,7 +141,11 @@ function handlers.SaveDeck(player, args)
 	if not filtered then
 		return false, "Couldn't check that name right now. Try again."
 	end
-	return PlayerData.SaveDeck(player, args, filtered)
+	local ok, result = PlayerData.SaveDeck(player, args, filtered)
+	if ok then
+		Analytics.Event(player, "deck_saved", args.Format)
+	end
+	return ok, result
 end
 
 function handlers.DeleteDeck(player, args)
@@ -166,6 +172,9 @@ function studioHandlers.DevGrantStarter(player, args)
 end
 
 request.OnServerInvoke = function(player, kind, args)
+	if not RateLimit.Allow(player, "Economy", 12, 2) then
+		return false, "Slow down a little."
+	end
 	if type(kind) ~= "string" then
 		return false, "Bad request."
 	end

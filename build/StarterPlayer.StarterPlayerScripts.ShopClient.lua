@@ -922,6 +922,7 @@ end
 local function openShop(startTab)
 	if not gui.Enabled then
 		SoundAssets.Play("MenuOpen")
+		pcall(function() ReplicatedStorage.AnalyticsRemotes.Track:FireServer("shop_opened") end) -- launch analytics
 	end
 	gui.Enabled = true
 	if startTab then
@@ -1050,6 +1051,11 @@ task.spawn(function()
 	if ok and result then
 		onSummary(result)
 	end
+end)
+
+-- Other screens (the new-player guide) can open the shop: ShopGui.OpenShop:Fire(tab)
+make("BindableEvent", { Name = "OpenShop" }, gui).Event:Connect(function(tab)
+	openShop(tab)
 end)
 
 shopEvent.OnClientEvent:Connect(function(payload)

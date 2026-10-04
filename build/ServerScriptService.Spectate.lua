@@ -29,6 +29,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
+local RateLimit = require(ServerScriptService:WaitForChild("RateLimit"))
 
 local CardDatabase = require(ReplicatedStorage:WaitForChild("CardDatabase"))
 
@@ -511,6 +512,9 @@ local function allSnapshots()
 end
 
 request.OnServerInvoke = function(player, kind, index)
+	if not RateLimit.Allow(player, "Spectate", 10, 2) then
+		return false
+	end
 	if kind == "All" then
 		return allSnapshots()
 	elseif kind == "Watch" then

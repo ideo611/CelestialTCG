@@ -29,11 +29,12 @@ local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local CardDatabase = require(ReplicatedStorage:WaitForChild("CardDatabase"))
+local BuildInfo = require(ReplicatedStorage:WaitForChild("BuildInfo"))
 
 local MatchLog = {}
 
 MatchLog.StoreName = "MatchLog"
-MatchLog.Schema = 1               -- the record layout; bump if fields change meaning
+MatchLog.Schema = 2               -- the record layout; bump if fields change meaning (2: Seconds, Build, Device, TimedOut)
 MatchLog.FlushEvery = 120         -- seconds between saves
 MatchLog.BatchSize = 40           -- save early once this many games are waiting
 MatchLog.MaxBuffered = 1000       -- if saving keeps failing, oldest games are dropped past this
@@ -155,7 +156,10 @@ end
 	Mode      = "Bot" or "PvP"
 	BestOf    = 1, 3 or 5;  Game = which game of the series
 	Left      = seat that left the table (if the game ended that way)
-	Table     = table number
+	Table     = table number (nil for an off-table practice match)
+	Duration  = seconds the game took (wall clock)
+	Devices   = { [1], [2] } device class of each player ("Phone", "PC"...; nil for the bot)
+	TimedOut  = { [1], [2] } turns each seat lost to the turn timer
 } ]]
 function MatchLog.BuildRecord(info)
 	local battle = info.Battle
@@ -193,6 +197,8 @@ function MatchLog.BuildRecord(info)
 			Summons = seatStats.Summons or 0,
 			Storm = seatStats.StormDamage or 0,
 			Spark = seatStats.SparkUsed or false,
+			Device = info.Devices and info.Devices[seat] or nil,
+			TimedOut = info.TimedOut and info.TimedOut[seat] or nil,
 		}
 	end
 
@@ -213,6 +219,8 @@ function MatchLog.BuildRecord(info)
 		Left = info.Left,
 		Turns = battle.Turn,
 		Rounds = math.ceil(battle.Turn / 2),
+		Seconds = info.Duration and math.floor(info.Duration) or nil,
+		Build = BuildInfo.BuildVersion,
 		Seats = seats,
 	}
 end

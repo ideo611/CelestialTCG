@@ -22,6 +22,7 @@ local EconomyConfig = require(ReplicatedStorage:WaitForChild("EconomyConfig"))
 local Packs = require(ReplicatedStorage:WaitForChild("Packs"))
 local Singles = require(ReplicatedStorage:WaitForChild("Singles"))
 local PlayerData = require(ServerScriptService:WaitForChild("PlayerData"))
+local RateLimit = require(ServerScriptService:WaitForChild("RateLimit"))
 local Building = require(ServerScriptService:WaitForChild("CardShopBuilding"))
 
 local REVEAL_SECONDS = 0.8      -- time between cards flipping for watchers
@@ -341,6 +342,9 @@ function handlers.EquipMat(player, args)
 end
 
 shopRequest.OnServerInvoke = function(player, kind, args)
+	if not RateLimit.Allow(player, "Shop", 12, 2) then
+		return false, "Slow down a little."
+	end
 	if type(kind) ~= "string" or not handlers[kind] then
 		return false, "Unknown request."
 	end

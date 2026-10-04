@@ -71,6 +71,17 @@ for _, s in ipairs(locals) do M.runScript(s[1], s[2]) end
 M.run(4)
 check("client scripts boot without errors", #M.errors == 0, M.errors[1])
 
+-- rate limiting: a burst of shop requests gets cut off, then tests may hammer freely
+do
+	local RateLimit = require(SSS.RateLimit)
+	local refused = 0
+	for _ = 1, 30 do
+		local ok, msg = RS.ShopRemotes.ShopRequest:InvokeServer("Nope", {})
+		if msg == "Slow down a little." then refused = refused + 1 end
+	end
+	check("rate limit cuts off a burst of 30 shop requests", refused >= 15, refused)
+	RateLimit.Enabled = false
+end
 local PlayerData = require(SSS.PlayerData)
 local EconomyConfig = require(RS.EconomyConfig)
 local Packs = require(RS.Packs)
@@ -100,6 +111,13 @@ if starterGui then
 end
 local data = PlayerData.Get(nik)
 check("claimed the free Solar starter from the browser", data and data.OwnedStarters and data.OwnedStarters.Solar == true)
+
+-- production start state: no test coins, only the starting coins and the free starter
+check("new player starts with exactly the starting coins (no test coins)",
+	data and data.Coins == EconomyConfig.StartingCoins and EconomyConfig.PlaytestCoins == 0 and not data.PlaytestCoinsGiven,
+	data and data.Coins)
+check("new player has no shards, tokens or extra starters", data and data.StarShards == 0 and data.StarTokens == 0
+	and data.OwnedStarters.Lunar == nil)
 
 -- packs: each booster type
 data.Coins = 5000

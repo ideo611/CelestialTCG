@@ -18,8 +18,9 @@ local CardDatabase = require(ReplicatedStorage:WaitForChild("CardDatabase"))
 local EconomyConfig = require(ReplicatedStorage:WaitForChild("EconomyConfig"))
 local Packs = require(ReplicatedStorage:WaitForChild("Packs"))
 local Playmats = require(ReplicatedStorage:WaitForChild("Playmats"))
+local Analytics = require(game:GetService("ServerScriptService"):WaitForChild("Analytics"))
 
-local STORE_NAME = "PlayerData_v1"
+local STORE_NAME = "PlayerData_v2" -- LAUNCH: fresh store; playtest saves stay in PlayerData_v1
 local LOAD_RETRIES = 3
 local DATA_VERSION = 1
 -- Bump when starter deck lists change: players who own a starter get any
@@ -68,6 +69,13 @@ local function defaultData()
 		SinglesBought = {},     -- [cardId] = true: singles bought that day (one of each per day)
 		BinderShowcase = {},    -- the binder's front page: list of { CardId, Finish } (up to 9)
 		BinderCover = "",       -- binder cover color: a faction name ("" = default)
+		Onboarding = {          -- new-player progress
+			TutorialDone = false,     -- finished or skipped the tutorial
+			TutorialSkipped = false,
+			MatchesStarted = 0,       -- real matches (not the tutorial)
+			FirstWinDay = 0,          -- the UTC day the first-win bonus was last paid
+			Logged = {},              -- onboarding analytics steps already sent
+		},
 		Settings = {            -- battle screen settings, kept between visits
 			AnimSpeed = 1,      -- 1 Normal, 2 Fast, 0 Off
 			Sound = true,
@@ -201,6 +209,7 @@ function PlayerData.Load(player)
 			profiles[player] = { Data = temp, Temporary = true }
 			PlayerData.ApplySettings(player)
 			player:SetAttribute("DataLoaded", true) -- lifts the loading screen
+			Analytics.Onboarding(player, "load_complete")
 			return true
 		end
 		player:Kick("We couldn't load your cards. Please rejoin in a moment.")
@@ -218,6 +227,7 @@ function PlayerData.Load(player)
 	profiles[player] = { Data = data, Temporary = false }
 	PlayerData.ApplySettings(player)
 	player:SetAttribute("DataLoaded", true) -- lifts the loading screen
+	Analytics.Onboarding(player, "load_complete")
 	return true
 end
 
@@ -292,6 +302,7 @@ function PlayerData.Get(player)
 	local profile = profiles[player]
 	return profile and profile.Data
 end
+Analytics.GetData = PlayerData.Get
 
 local function changed(player)
 	if PlayerData.Changed then
@@ -346,6 +357,8 @@ function PlayerData.ClaimStarter(player, deckName)
 		return false, message
 	end
 	PlayerData.Save(player)
+	Analytics.Onboarding(player, "starter_claimed", deckName)
+	Analytics.Event(player, "starter_claimed", deckName, price)
 	return true, price
 end
 
@@ -406,11 +419,28 @@ function PlayerData.GrantCoins(player, amount)
 	return amount
 end
 
--- Called when a match ends. Returns coins given.
+-- First win of the day: a bonus on top of the match reward (outside the daily cap).
+-- Returns the bonus paid (0 if it was already paid today or the match was too short).
+function PlayerData.FirstWinAvailable(data)
+	return data ~= nil and (data.Onboarding.FirstWinDay or 0) ~= today()
+end
+
+local function payFirstWin(player, data)
+	local bonus = EconomyConfig.FirstWinBonusCoins or 0
+	if bonus <= 0 or not PlayerData.FirstWinAvailable(data) then
+		return 0
+	end
+	data.Onboarding.FirstWinDay = today()
+	data.Coins = data.Coins + bonus
+	Analytics.Event(player, "first_win_bonus", nil, bonus)
+	return bonus
+end
+
+-- Called when a match ends. Returns coins given, then the first-win bonus paid.
 function PlayerData.RecordMatch(player, won, vsBot, turns)
 	local data = PlayerData.Get(player)
 	if not data then
-		return 0
+		return 0, 0
 	end
 	local rewards = EconomyConfig.MatchRewards
 	if won then
@@ -420,7 +450,7 @@ function PlayerData.RecordMatch(player, won, vsBot, turns)
 	end
 	if turns < rewards.MinTurns then
 		changed(player)
-		return 0
+		return 0, 0
 	end
 	local amount
 	if vsBot then
@@ -429,8 +459,30 @@ function PlayerData.RecordMatch(player, won, vsBot, turns)
 		amount = won and rewards.PvPWin or rewards.PvPLoss
 	end
 	local given = PlayerData.AddEarnedCoins(player, amount)
+	local bonus = won and payFirstWin(player, data) or 0
 	changed(player)
-	return given
+	return given, bonus
+end
+
+-- Onboarding progress: the tutorial
+function PlayerData.SetTutorialDone(player, skipped)
+	local data = PlayerData.Get(player)
+	if not data then
+		return
+	end
+	data.Onboarding.TutorialDone = true
+	data.Onboarding.TutorialSkipped = skipped == true
+	changed(player)
+end
+
+-- Counts a real match starting; returns how many this player has started (1 = their first)
+function PlayerData.NoteMatchStarted(player)
+	local data = PlayerData.Get(player)
+	if not data then
+		return 0
+	end
+	data.Onboarding.MatchesStarted = (data.Onboarding.MatchesStarted or 0) + 1
+	return data.Onboarding.MatchesStarted
 end
 
 ---------------------------------------------------------------------
@@ -474,6 +526,8 @@ function PlayerData.OpenPack(player, currency, packTypeId)
 	data.PacksOpened = data.PacksOpened + 1
 	changed(player)
 	PlayerData.Save(player) -- pack results are saved right away
+	Analytics.Event(player, "pack_opened", packTypeId .. ":" .. currency)
+	Analytics.Onboarding(player, "first_pack_opened", packTypeId)
 	if PlayerData.PackOpened then
 		task.spawn(PlayerData.PackOpened, player, pulls)
 	end
@@ -1003,6 +1057,10 @@ function PlayerData.GetSummary(player)
 		EquippedMat = PlayerData.GetEquippedMat(player),
 		BinderShowcase = PlayerData.GetShowcase(data),
 		BinderCover = VALID_COVER[data.BinderCover] and data.BinderCover or "Black",
+		TutorialDone = data.Onboarding.TutorialDone,
+		MatchesPlayed = data.Stats.Wins + data.Stats.Losses,
+		FirstWinAvailable = PlayerData.FirstWinAvailable(data),
+		FirstWinBonus = EconomyConfig.FirstWinBonusCoins or 0,
 	}
 end
 

@@ -710,6 +710,7 @@ end
 local lookingAt = nil -- UserId of the binder you're looking at (not yours)
 
 local function openBinder(view, isMine)
+	pcall(function() ReplicatedStorage.AnalyticsRemotes.Track:FireServer("binder_opened", isMine and "mine" or "other") end) -- launch analytics
 	if lookingAt and lookingAt ~= view.OwnerUserId then
 		ask("StopLooking", { UserId = lookingAt })
 	end

@@ -335,8 +335,15 @@ function render()
 		end
 		local ok, result = shopRequest:InvokeServer("ClaimStarter", { Deck = selected })
 		if ok then
+			local wasWelcome = welcomeMode
 			welcomeMode = false
 			message = ("The %s starter deck is yours! Try it at any play table."):format(selected)
+			if wasWelcome then
+				-- a brand-new player's first deck: close so the guide can show what's next
+				task.delay(1.5, function()
+					gui.Enabled = false
+				end)
+			end
 		else
 			message = result
 		end
@@ -351,6 +358,7 @@ local function open(faction, isWelcome)
 	welcomeMode = isWelcome or false
 	message = ""
 	gui.Enabled = true
+	pcall(function() ReplicatedStorage.AnalyticsRemotes.Track:FireServer("starter_screen_view", isWelcome and "welcome" or "table") end) -- launch analytics
 	render()
 end
 

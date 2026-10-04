@@ -29,6 +29,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local CardArt = require(ReplicatedStorage:WaitForChild("CardArt"))
 local CardVisuals = require(ReplicatedStorage:WaitForChild("CardVisuals"))
 local PlayerData = require(ServerScriptService:WaitForChild("PlayerData"))
+local RateLimit = require(ServerScriptService:WaitForChild("RateLimit"))
 
 local LOOK_DISTANCE = 18 -- studs between you and the binder's owner
 local MAX_LOOKS_PER_MINUTE = 30
@@ -489,6 +490,9 @@ function handlers.SetCover(player, args)
 end
 
 request.OnServerInvoke = function(player, kind, args)
+	if not RateLimit.Allow(player, "Binder", 15, 2) then
+		return false, "Slow down a little."
+	end
 	if type(kind) ~= "string" or not handlers[kind] then
 		return false, "Unknown request."
 	end

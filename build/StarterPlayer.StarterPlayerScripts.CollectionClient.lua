@@ -371,6 +371,7 @@ end
 -- Decks list
 ---------------------------------------------------------------------
 local function startEditor(deck)
+	pcall(function() ReplicatedStorage.AnalyticsRemotes.Track:FireServer("deck_editor_opened", deck and "edit" or "new") end) -- launch analytics
 	if deck then
 		local cards = {}
 		for i, id in ipairs(deck.Cards) do
@@ -903,6 +904,7 @@ end)
 openButton.Activated:Connect(function()
 	SoundAssets.Play("MenuOpen")
 	gui.Enabled = true
+	pcall(function() ReplicatedStorage.AnalyticsRemotes.Track:FireServer("collection_opened") end) -- launch analytics
 	render()
 end)
 closeButton.Activated:Connect(function()

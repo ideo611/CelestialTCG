@@ -138,6 +138,14 @@ UiAssets.Vfx = {
 	CometImpact = id(0),
 }
 
+-- Effects that rise out of the ground: on a card they play under the card,
+-- lined up with its bottom edge. The number is how far down the effect's
+-- image its ground ring sits (0 = top, 1 = bottom).
+UiAssets.GroundedVfx = {
+	CardLanding = 0.68,
+	HealPulse = 0.72,
+}
+
 -- If an effect isn't uploaded, play this one instead
 local VFX_FALLBACK = {
 	HitFlash = "ImpactBurst",

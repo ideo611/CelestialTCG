@@ -407,6 +407,15 @@ local function drawMats(myId, enemyId)
 	end
 end
 
+-- Effects that rise from the ground play here: above the playmat but under
+-- the cards, so they look like they come from beneath the card
+local underLayer = make("Frame", {
+	Name = "UnderFX",
+	Size = UDim2.fromScale(1, 1),
+	BackgroundTransparency = 1,
+	ZIndex = 0,
+}, root)
+
 -- A button shaped like a card, centered in the given box
 local slotBase = {} -- [slot] = { X, Y, W, H } resting center and size (screen fractions)
 
@@ -2305,8 +2314,15 @@ function playEvent._fx(slot, key, size, options)
 	if not base and options.Size then
 		h = options.Size -- (a screen-position effect: Size is its height as a share of the screen)
 	end
-	UiAssets.PlayFlipbook(fxLayer, UiAssets.VfxImage(key), {
-		Position = options.Position or UDim2.fromScale(base.X, base.Y),
+	local layer, position = fxLayer, options.Position or (base and UDim2.fromScale(base.X, base.Y))
+	local ground = base and not options.Position and UiAssets.GroundedVfx[key]
+	if ground then
+		-- its ground ring sits at the bottom edge of the card, under the card
+		layer = underLayer
+		position = UDim2.fromScale(base.X, base.Y + base.H / 2 - (ground - 0.5) * h)
+	end
+	UiAssets.PlayFlipbook(layer, UiAssets.VfxImage(key), {
+		Position = position,
 		Size = UDim2.fromScale(h, h),
 		Duration = seconds(options.Duration or 0.55),
 		ZIndex = options.ZIndex or 17,

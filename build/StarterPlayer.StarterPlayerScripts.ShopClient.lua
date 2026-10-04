@@ -160,12 +160,12 @@ local gui = make("ScreenGui", {
 local root = make("Frame", { Name = "Root", Size = UDim2.fromScale(1, 1), BackgroundColor3 = BG, BorderSizePixel = 0 }, gui)
 UiTheme.Backdrop(root)
 UiTheme.FitScreen(root)
-local TABS = { { "Packs", "Packs" }, { "Singles", "Singles" }, { "Starters", "Starter Decks" },
-	{ "Tokens", "Star Tokens" }, { "BreakDown", "Break Down" }, { "Playmats", "Playmats" } }
+local TABS = { { "Packs", "Packs" }, { "Boxes", "Tickets & Boxes" }, { "Singles", "Singles" },
+	{ "Starters", "Starter Decks" }, { "Tokens", "Star Tokens" }, { "BreakDown", "Break Down" }, { "Playmats", "Playmats" } }
 local tabButtons = {}
 for i, info in ipairs(TABS) do
-	tabButtons[info[1]] = button(root, "Tab_" .. info[1], info[2], UDim2.new(0.02 + (i - 1) * 0.102, 0, 0, 12),
-		UDim2.new(0.097, 0, 0, 40))
+	tabButtons[info[1]] = button(root, "Tab_" .. info[1], info[2], UDim2.new(0.02 + (i - 1) * 0.096, 0, 0, 12),
+		UDim2.new(0.09, 0, 0, 40))
 	tabButtons[info[1]].Activated:Connect(function()
 		tab = info[1]
 		message = ""
@@ -173,22 +173,30 @@ for i, info in ipairs(TABS) do
 	end)
 end
 local closeButton = button(root, "CloseShop", "Close", UDim2.new(0.88, 0, 0, 12), UDim2.new(0.1, 0, 0, 40), GREY)
-local walletLabel = label(root, "ShopWallet", UDim2.new(0.635, 0, 0, 12), UDim2.new(0.235, 0, 0, 40), "", 18)
--- coin / shard / token icons with amounts, in place of the words
+local walletLabel = label(root, "ShopWallet", UDim2.new(0.56, 0, 0, 54), UDim2.new(0.42, 0, 0, 34), "", 18)
+-- coin / shard / token / ticket amounts with icons (second row, on the right)
 local walletRow = make("Frame", {
 	Name = "ShopWalletIcons",
-	Position = UDim2.new(0.635, 0, 0, 12),
-	Size = UDim2.new(0.235, 0, 0, 40),
+	Position = UDim2.new(0.56, 0, 0, 54),
+	Size = UDim2.new(0.42, 0, 0, 34),
 	BackgroundTransparency = 1,
 }, root)
 make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 10),
 	HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center,
 	SortOrder = Enum.SortOrder.LayoutOrder }, walletRow)
 local walletAmounts = {}
-for i, key in ipairs({ "Coins", "StarShards", "StarTokens" }) do
-	if UiAssets.Currency[key] then
+for i, key in ipairs({ "Coins", "StarShards", "StarTokens", "Tickets" }) do
+	if UiAssets.Currency[key] or key == "Tickets" then
 		local cell = make("Frame", { Name = key, Size = UDim2.fromOffset(92, 34), BackgroundTransparency = 1, LayoutOrder = i }, walletRow)
-		UiAssets.Icon(UiAssets.Currency[key], UDim2.fromOffset(30, 30), UDim2.fromOffset(0, 2), cell)
+		if UiAssets.Currency[key] then
+			UiAssets.Icon(UiAssets.Currency[key], UDim2.fromOffset(30, 30), UDim2.fromOffset(0, 2), cell)
+		else
+			-- (no ticket icon uploaded yet: a little gold ticket)
+			local stub = make("Frame", { Name = "TicketIcon", Position = UDim2.fromOffset(2, 7), Size = UDim2.fromOffset(28, 20),
+				BackgroundColor3 = GOLD }, cell)
+			make("UICorner", { CornerRadius = UDim.new(0, 4) }, stub)
+			label(stub, "T", UDim2.fromScale(0, 0), UDim2.fromScale(1, 1), "T", 14, { TextColor3 = Color3.fromRGB(80, 50, 10) })
+		end
 		walletAmounts[key] = label(cell, "Amount", UDim2.fromOffset(34, 0), UDim2.new(1, -34, 1, 0), "", 18,
 			{ TextXAlignment = Enum.TextXAlignment.Left })
 	end
@@ -199,7 +207,7 @@ local function setWalletIcons(summary)
 	end
 end
 
-local messageLabel = label(root, "ShopMessage", UDim2.new(0.02, 0, 0, 58), UDim2.new(0.96, 0, 0, 26), "", 18,
+local messageLabel = label(root, "ShopMessage", UDim2.new(0.02, 0, 0, 58), UDim2.new(0.53, 0, 0, 26), "", 18,
 	{ TextColor3 = Color3.fromRGB(255, 230, 120) })
 local content = make("Frame", {
 	Name = "Content",
@@ -445,6 +453,7 @@ local function startReveal(pulls, packName)
 end
 
 revealAll.Activated:Connect(flipRest)
+local afterReveal = nil -- set while opening a box: what happens when "Done" is pressed
 revealDone.Activated:Connect(function()
 	if revealState and revealState.Remaining > 0 then
 		flipRest()
@@ -452,6 +461,12 @@ revealDone.Activated:Connect(function()
 	end
 	reveal.Visible = false
 	revealState = nil
+	if afterReveal then
+		local next = afterReveal
+		afterReveal = nil
+		next()
+		return
+	end
 	render()
 end)
 
@@ -597,18 +612,32 @@ local function renderPacks()
 	local Packs = require(ReplicatedStorage:WaitForChild("Packs"))
 	local fronts = Packs.FrontCards(packType)
 	PackVisuals.Draw(preview, packType, fronts[1])
-	label(panel, "PackName", UDim2.fromScale(0.06, 0.62), UDim2.fromScale(0.88, 0.07), info.Name, 28)
-	label(panel, "PackSize", UDim2.fromScale(0.06, 0.69), UDim2.fromScale(0.88, 0.05),
+	label(panel, "PackName", UDim2.fromScale(0.06, 0.615), UDim2.fromScale(0.88, 0.065), info.Name, 28)
+	label(panel, "PackSize", UDim2.fromScale(0.06, 0.68), UDim2.fromScale(0.88, 0.05),
 		info.Faction and ("6 cards, mostly %s (plus Neutral cards and %s Celestials)"):format(info.Faction, info.Faction)
 			or "6 cards from every faction", 16, { Font = Enum.Font.Gotham })
-	local buyCoins = button(panel, "BuyWithCoins", ("Buy with %d coins"):format(EconomyConfig.PackPriceCoins),
-		UDim2.fromScale(0.08, 0.76), UDim2.fromScale(0.84, 0.1), GREEN)
+	local left = summary.CoinPacksLeft or EconomyConfig.DailyCoinPacks
+	local buyCoins = button(panel, "BuyWithCoins", ("Buy with %d coins  (%d/%d left today)"):format(EconomyConfig.PackPriceCoins,
+		left, summary.CoinPacksPerDay or EconomyConfig.DailyCoinPacks),
+		UDim2.fromScale(0.08, 0.745), UDim2.fromScale(0.84, 0.075), left > 0 and GREEN or GREY)
+	local tickets = summary.Tickets or 0
+	local useTicket = button(panel, "BuyWithTicket", tickets > 0 and ("Use a pack ticket  (%d)"):format(tickets)
+		or "Use a pack ticket  (none)",
+		UDim2.fromScale(0.08, 0.83), UDim2.fromScale(0.84, 0.075), tickets > 0 and Color3.fromRGB(190, 140, 40) or GREY)
 	local buyShards = button(panel, "BuyWithShards", ("Buy with %d Star Shards"):format(EconomyConfig.PackPriceShards),
-		UDim2.fromScale(0.08, 0.875), UDim2.fromScale(0.84, 0.1), Color3.fromRGB(60, 110, 170))
+		UDim2.fromScale(0.08, 0.915), UDim2.fromScale(0.84, 0.075), Color3.fromRGB(60, 110, 170))
 	local function buy(currency)
 		-- say so before showing packs if it can't be afforded
-		if summary and currency == "Coins" and summary.Coins < EconomyConfig.PackPriceCoins then
+		if summary and currency == "Coins" and (summary.CoinPacksLeft or 1) <= 0 then
+			message = "You've bought today's coin packs. Use a pack ticket, or come back tomorrow!"
+			render()
+			return
+		elseif summary and currency == "Coins" and summary.Coins < EconomyConfig.PackPriceCoins then
 			message = ("You need %d coins."):format(EconomyConfig.PackPriceCoins)
+			render()
+			return
+		elseif summary and currency == "Ticket" and (summary.Tickets or 0) < 1 then
+			message = "No pack tickets yet. Win your first match of the day for a free one, or get some in Tickets & Boxes."
 			render()
 			return
 		elseif summary and currency == "Shards" and summary.StarShards < EconomyConfig.PackPriceShards then
@@ -629,6 +658,9 @@ local function renderPacks()
 	end)
 	buyShards.Activated:Connect(function()
 		buy("Shards")
+	end)
+	useTicket.Activated:Connect(function()
+		buy("Ticket")
 	end)
 
 	-- Right: odds for this pack, shown before buying
@@ -997,6 +1029,320 @@ local function renderPlaymats()
 	end
 end
 
+---------------------------------------------------------------------
+-- Tickets & Boxes (Robux)
+---------------------------------------------------------------------
+local productInfo = nil -- from the server: { Products = { { Key, Name, Robux, Ready } }, Restricted }
+
+local PRODUCT_TEXT = {
+	Ticket1 = "Opens any booster. No daily limit, never expires.",
+	Ticket5 = "Five tickets: open five boosters of your choice.",
+	BoosterBox = (function()
+		local parts = {}
+		for _, f in ipairs(EconomyConfig.Box.TopperFinishes) do
+			table.insert(parts, ("%s %d%%"):format(CardVisuals.FinishNames[f.Finish] or f.Finish, f.Chance))
+		end
+		return ("A sealed box of %d boosters of one kind (you pick when you open it). Each pack has the normal "
+			.. "pack odds (Packs tab). Plus a box topper: a Commander or Celestial you don't own yet if possible, "
+			.. "finish: %s."):format(EconomyConfig.Box.Packs, table.concat(parts, ", "))
+	end)(),
+}
+
+-- The box opening screen: the topper first, then pack by pack (or all at once)
+local boxScreen = make("Frame", {
+	Name = "BoxOpening",
+	Size = UDim2.fromScale(1, 1),
+	BackgroundColor3 = BG,
+	Visible = false,
+	ZIndex = 6,
+}, gui)
+UiTheme.Backdrop(boxScreen, { Seed = 17 })
+UiTheme.FitScreen(boxScreen)
+local boxTitle = UiTheme.Title(label(boxScreen, "BoxTitle", UDim2.fromScale(0.1, 0.04), UDim2.fromScale(0.8, 0.08),
+	"Booster Box", 34, { ZIndex = 6 }))
+local boxNote = label(boxScreen, "BoxNote", UDim2.fromScale(0.1, 0.12), UDim2.fromScale(0.8, 0.05), "", 18,
+	{ ZIndex = 6, Font = Enum.Font.Gotham, TextColor3 = Color3.fromRGB(210, 200, 240) })
+local boxBody = make("Frame", {
+	Name = "BoxBody",
+	Position = UDim2.fromScale(0.05, 0.18),
+	Size = UDim2.fromScale(0.9, 0.64),
+	BackgroundTransparency = 1,
+	ZIndex = 6,
+}, boxScreen)
+local boxNext = button(boxScreen, "BoxNextPack", "Open pack 1", UDim2.fromScale(0.24, 0.86), UDim2.fromScale(0.24, 0.08), GREEN)
+local boxAll = button(boxScreen, "BoxShowAll", "Show every card", UDim2.fromScale(0.52, 0.86), UDim2.fromScale(0.24, 0.08))
+boxNext.ZIndex = 6
+boxAll.ZIndex = 6
+local boxState = nil -- { Result, Next = next pack to open, Name }
+
+local function closeBox()
+	boxScreen.Visible = false
+	boxState = nil
+	render()
+end
+
+-- Every card from the box, best first
+local POOL_RANK = { Mythic = 6, CommanderOrCelestial = 5, LegendaryDeckCard = 4, Epic = 3, Rare = 2, Common = 1 }
+local FINISH_RANK = { Mythic = 5, ["3D"] = 4, Textured = 3, Holo = 2, Base = 1 }
+local function showBoxSummary()
+	local state = boxState
+	if not state then
+		return
+	end
+	clear(boxBody)
+	boxTitle.Text = state.Name .. " box: every card"
+	local all = { state.Result.Topper }
+	for _, pulls in ipairs(state.Result.Packs) do
+		for _, pull in ipairs(pulls) do
+			table.insert(all, pull)
+		end
+	end
+	table.sort(all, function(a, b)
+		local ra, rb = POOL_RANK[a.Pool] or 0, POOL_RANK[b.Pool] or 0
+		if ra ~= rb then return ra > rb end
+		return (FINISH_RANK[a.Finish] or 0) > (FINISH_RANK[b.Finish] or 0)
+	end)
+	local newCount = 0
+	for _, pull in ipairs(all) do
+		if pull.New then newCount = newCount + 1 end
+	end
+	boxNote.Text = ("%d cards, %d new to your collection. Tap a card to see it big."):format(#all, newCount)
+	local grid = make("ScrollingFrame", {
+		Name = "BoxCards",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 10,
+		ScrollBarImageColor3 = UiTheme.Colors.Gold,
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ZIndex = 6,
+	}, boxBody)
+	make("UIGridLayout", { CellSize = UDim2.new(0.1, -8, 0, 190), CellPadding = UDim2.fromOffset(8, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder }, grid)
+	for i, pull in ipairs(all) do
+		local cell = make("TextButton", { Name = "BoxCard_" .. i, Text = "", AutoButtonColor = false, LayoutOrder = i,
+			BackgroundTransparency = 1, ZIndex = 6 }, grid)
+		local cardFrame = make("Frame", { Name = "Card", Size = UDim2.new(1, 0, 1, -22), BackgroundTransparency = 1, ZIndex = 6 }, cell)
+		CardVisuals.Draw(cardFrame, pull.CardId, { Finish = pull.Finish })
+		raiseText(cardFrame)
+		local card = CardDatabase.GetCard(pull.CardId)
+		label(cell, "Caption", UDim2.new(0, 0, 1, -20), UDim2.new(1, 0, 0, 20),
+			(pull.Slot == "Box topper" and "Topper " or "") .. (pull.New and "NEW " or "")
+				.. (CardVisuals.FinishNames[pull.Finish] or pull.Finish), 13,
+			{ ZIndex = 6, TextColor3 = pull.Finish == "Mythic" and CardVisuals.MythicColor
+				or (CardVisuals.RarityColors[card.Rarity] or WHITE) })
+		cell.Activated:Connect(function()
+			showCardInspect(pull.CardId, pull.Finish)
+		end)
+	end
+	boxNext.Text = "Done"
+	boxNext.Position = UDim2.fromScale(0.38, 0.86) -- (alone in the middle)
+	boxAll.Visible = false
+end
+
+local function showBoxStep()
+	local state = boxState
+	if not state then
+		return
+	end
+	local total = #state.Result.Packs
+	if state.Next > total then
+		showBoxSummary()
+		return
+	end
+	boxNext.Text = state.Next == 1 and "Open the first pack" or ("Open pack %d of %d"):format(state.Next, total)
+	boxNext.Position = UDim2.fromScale(0.24, 0.86)
+	boxAll.Visible = true
+	boxAll.Text = "Skip to every card"
+end
+
+boxNext.Activated:Connect(function()
+	local state = boxState
+	if not state then
+		return
+	end
+	if state.Next > #state.Result.Packs then
+		closeBox()
+		return
+	end
+	local index = state.Next
+	state.Next = state.Next + 1
+	boxScreen.Visible = false
+	afterReveal = function()
+		boxScreen.Visible = true
+		showBoxStep()
+	end
+	startReveal(state.Result.Packs[index], ("%s (%d/%d)"):format(state.Name, index, #state.Result.Packs))
+end)
+boxAll.Activated:Connect(function()
+	if boxState then
+		boxState.Next = #boxState.Result.Packs + 1
+		showBoxSummary()
+	end
+end)
+
+local function startBox(result)
+	local info = EconomyConfig.GetPackType(result.PackType)
+	boxState = { Result = result, Next = 1, Name = info and info.Name or "Booster" }
+	clear(boxBody)
+	boxTitle.Text = boxState.Name .. " Box"
+	boxNote.Text = ("The box topper first, then %d packs. Open them one by one, or skip to every card.")
+		:format(#result.Packs)
+	-- the topper, face down, then it turns over
+	local holder = make("Frame", {
+		Name = "Topper",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.48),
+		Size = UDim2.fromScale(0.3, 0.92),
+		BackgroundTransparency = 1,
+		ZIndex = 6,
+	}, boxBody)
+	make("UIAspectRatioConstraint", { AspectRatio = 1060 / 1484 }, holder)
+	CardVisuals.DrawFaceDown(holder, "Box topper")
+	raiseText(holder)
+	local topperCaption = label(boxBody, "TopperCaption", UDim2.fromScale(0.25, 0.94), UDim2.fromScale(0.5, 0.06), "", 20,
+		{ ZIndex = 6 })
+	boxNext.Visible = false
+	boxAll.Visible = false
+	boxScreen.Visible = true
+	SoundAssets.Play("PackTear")
+	task.spawn(function()
+		task.wait(0.6)
+		local topper = result.Topper
+		local card = CardDatabase.GetCard(topper.CardId)
+		CardVisuals.Flip(holder, function(target)
+			CardVisuals.Draw(target, topper.CardId, { Finish = topper.Finish })
+			raiseText(target)
+		end, {
+			Duration = 0.5,
+			Tease = CardVisuals.RarityColors.Legendary,
+			TeaseTime = 0.8,
+			OnShown = function()
+				SoundAssets.Play("RevealLegendary")
+				UiAssets.PlayFlipbook(boxBody, UiAssets.Vfx.LegendaryPull, {
+					Position = UDim2.fromScale(0.5, 0.48), Size = UDim2.fromScale(0.7, 0.7), Duration = 0.9, ZIndex = 9 })
+				topperCaption.Text = ("Box topper: %s (%s)%s"):format(card.Name,
+					CardVisuals.FinishNames[topper.Finish] or topper.Finish, topper.New and "  NEW!" or "")
+			end,
+		})
+		boxNext.Visible = true
+		showBoxStep()
+	end)
+end
+
+-- Picking which booster a sealed box holds, then opening it
+local boxPicker = make("Frame", {
+	Name = "BoxPicker",
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.fromScale(0.44, 0.7),
+	BackgroundColor3 = PANEL,
+	Visible = false,
+	ZIndex = 7,
+}, gui)
+make("UICorner", { CornerRadius = UDim.new(0, 12) }, boxPicker)
+UiTheme.Panel(boxPicker)
+UiTheme.Title(label(boxPicker, "BoxPickerTitle", UDim2.fromScale(0.06, 0.03), UDim2.fromScale(0.88, 0.09),
+	"Which boosters are in your box?", 24, { ZIndex = 7 }))
+local boxPickerList = make("Frame", { Name = "BoxPickerList", Position = UDim2.fromScale(0.1, 0.14),
+	Size = UDim2.fromScale(0.8, 0.68), BackgroundTransparency = 1, ZIndex = 7 }, boxPicker)
+make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, boxPickerList)
+local boxPickerCancel = button(boxPicker, "BoxPickerCancel", "Not now", UDim2.fromScale(0.3, 0.86),
+	UDim2.fromScale(0.4, 0.09), GREY)
+boxPickerCancel.ZIndex = 7
+boxPickerCancel.Activated:Connect(function()
+	boxPicker.Visible = false
+end)
+for i, t in ipairs(EconomyConfig.PackTypes) do
+	local colors = PackVisuals.Wrappers[t.Id] or PackVisuals.Wrappers.All
+	local b = button(boxPickerList, "BoxOf_" .. t.Id, t.Name, UDim2.new(), UDim2.new(1, 0, 0, 44), colors[2] or ACCENT)
+	b.LayoutOrder = i
+	b.ZIndex = 7
+	b.Activated:Connect(function()
+		if not boxPicker.Visible then
+			return
+		end
+		boxPicker.Visible = false
+		local ok, result = ask("OpenBox", { PackType = t.Id })
+		if ok then
+			startBox(result)
+		else
+			message = result
+			SoundAssets.Play("NotEnough")
+			render()
+		end
+	end)
+end
+
+local function renderBoxes()
+	if not productInfo then
+		local ok, result = ask("GetProducts")
+		if ok then
+			productInfo = result
+		end
+	end
+	local products = productInfo and productInfo.Products or {}
+	local count = #products
+	for i, product in ipairs(products) do
+		local cell = make("Frame", {
+			Name = "Product_" .. product.Key,
+			Position = UDim2.new((i - 1) / count, 6, 0, 0),
+			Size = UDim2.new(1 / count, -12, 0.62, 0),
+			BackgroundColor3 = PANEL,
+		}, content)
+		make("UICorner", { CornerRadius = UDim.new(0, 12) }, cell)
+		UiTheme.Panel(cell)
+		UiTheme.Title(label(cell, "ProductName", UDim2.fromScale(0.06, 0.06), UDim2.fromScale(0.88, 0.14), product.Name, 26))
+		label(cell, "ProductText", UDim2.fromScale(0.08, 0.24), UDim2.fromScale(0.84, 0.44), PRODUCT_TEXT[product.Key] or "", 18,
+			{ Font = Enum.Font.Gotham, TextYAlignment = Enum.TextYAlignment.Top })
+		local blocked = productInfo.Restricted
+		local text = (not product.Ready) and "Coming soon" or (blocked and "Not available" or ("R$ %d"):format(product.Robux))
+		local b = button(cell, "Buy_" .. product.Key, text, UDim2.fromScale(0.12, 0.74), UDim2.fromScale(0.76, 0.18),
+			(product.Ready and not blocked) and GREEN or GREY)
+		b.Activated:Connect(function()
+			local ok, result = ask("BuyProduct", { Product = product.Key })
+			if not ok then
+				message = result
+				render()
+			end
+		end)
+	end
+	if productInfo and productInfo.Restricted then
+		label(content, "RestrictedNote", UDim2.new(0, 0, 0.64, 0), UDim2.new(1, 0, 0, 28),
+			"Tickets and boxes can't be bought in your region. You can still earn free pack tickets by playing.", 18,
+			{ TextColor3 = Color3.fromRGB(255, 200, 140) })
+	end
+
+	-- the shelf: sealed boxes waiting to be opened
+	local shelf = make("Frame", {
+		Name = "BoxShelf",
+		Position = UDim2.new(0, 6, 0.7, 0),
+		Size = UDim2.new(1, -12, 0.3, 0),
+		BackgroundColor3 = PANEL,
+	}, content)
+	make("UICorner", { CornerRadius = UDim.new(0, 12) }, shelf)
+	UiTheme.Panel(shelf)
+	local sealed = summary.SealedBoxes or 0
+	UiTheme.Title(label(shelf, "ShelfTitle", UDim2.fromScale(0.04, 0.1), UDim2.fromScale(0.5, 0.3),
+		"Your shelf", 24, { TextXAlignment = Enum.TextXAlignment.Left }))
+	label(shelf, "ShelfText", UDim2.fromScale(0.04, 0.45), UDim2.fromScale(0.6, 0.4),
+		sealed > 0 and ("%d sealed Booster Box%s. Open one whenever you like!"):format(sealed, sealed == 1 and "" or "es")
+			or ("No sealed boxes. You have %d pack ticket%s (use them on the Packs tab)."):format(summary.Tickets or 0,
+				(summary.Tickets or 0) == 1 and "" or "s"),
+		18, { Font = Enum.Font.Gotham, TextXAlignment = Enum.TextXAlignment.Left })
+	local openBox = button(shelf, "OpenSealedBox", "Open a box", UDim2.fromScale(0.68, 0.25), UDim2.fromScale(0.28, 0.5),
+		sealed > 0 and Color3.fromRGB(190, 140, 40) or GREY)
+	openBox.Activated:Connect(function()
+		if (summary.SealedBoxes or 0) < 1 then
+			message = "You don't have a sealed box yet."
+			render()
+			return
+		end
+		boxPicker.Visible = true
+	end)
+end
+
 function render()
 	clear(content)
 	for key, b in pairs(tabButtons) do
@@ -1025,6 +1371,8 @@ function render()
 		renderBreakDown()
 	elseif tab == "Playmats" then
 		renderPlaymats()
+	elseif tab == "Boxes" then
+		renderBoxes()
 	end
 end
 
@@ -1046,6 +1394,7 @@ closeButton.Activated:Connect(function()
 	gui.Enabled = false
 	oddsPopup.Visible = false
 	picker.Visible = false
+	boxPicker.Visible = false
 end)
 
 ---------------------------------------------------------------------
@@ -1176,5 +1525,8 @@ shopEvent.OnClientEvent:Connect(function(payload)
 		openShop(payload.Tab)
 	elseif payload.Kind == "Announcement" then
 		showToast(payload.Text, payload.Tier)
+	elseif payload.Kind == "PurchaseDone" then
+		SoundAssets.Play("Purchase")
+		showToast(("Thank you! %s added."):format(payload.Name or "Your purchase"), "Legendary")
 	end
 end)

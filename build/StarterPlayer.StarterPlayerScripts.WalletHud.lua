@@ -53,11 +53,24 @@ local wallet = make("Frame", {
 	Name = "WalletText",
 	AnchorPoint = Vector2.new(1, 0),
 	Position = UDim2.new(1, -10, 0, 10),
-	Size = UDim2.fromOffset(340, 62),
+	Size = UDim2.fromOffset(436, 62),
 	BackgroundColor3 = Color3.fromRGB(24, 20, 42),
 	BackgroundTransparency = 0.15,
 }, gui)
 make("UICorner", { CornerRadius = UDim.new(0, 10) }, wallet)
+-- smaller on short (phone) screens
+do
+	local fit = make("UIScale", { Name = "FitScale" }, wallet)
+	local function update()
+		local camera = workspace.CurrentCamera
+		local height = camera and camera.ViewportSize.Y or 820
+		fit.Scale = math.clamp(height / 820, 0.62, 1)
+	end
+	update()
+	if workspace.CurrentCamera then
+		workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(update)
+	end
+end
 UiTheme.Panel(wallet, { Thickness = 10 })
 
 local amounts = {}
@@ -65,6 +78,7 @@ local CURRENCIES = {
 	{ Key = "Coins", Short = "Coins" },
 	{ Key = "StarShards", Short = "Shards" },
 	{ Key = "StarTokens", Short = "Tokens" },
+	{ Key = "Tickets", Short = "Tickets" },
 }
 for i, c in ipairs(CURRENCIES) do
 	local cell = make("Frame", {
@@ -74,6 +88,14 @@ for i, c in ipairs(CURRENCIES) do
 		BackgroundTransparency = 1,
 	}, wallet)
 	local icon = UiAssets.Icon(UiAssets.Currency[c.Key], UDim2.fromOffset(32, 32), UDim2.fromOffset(0, 1), cell)
+	if not icon and c.Key == "Tickets" then
+		-- (no ticket icon uploaded yet: a little gold ticket)
+		icon = make("Frame", { Name = "TicketIcon", Position = UDim2.fromOffset(2, 7), Size = UDim2.fromOffset(28, 20),
+			BackgroundColor3 = Color3.fromRGB(240, 190, 70) }, cell)
+		make("UICorner", { CornerRadius = UDim.new(0, 4) }, icon)
+		make("TextLabel", { Name = "T", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "T",
+			Font = Enum.Font.GothamBlack, TextSize = 14, TextColor3 = Color3.fromRGB(80, 50, 10) }, icon)
+	end
 	amounts[c.Key] = make("TextLabel", {
 		Name = "Amount",
 		Position = UDim2.fromOffset(icon and 36 or 0, 0),
@@ -105,7 +127,9 @@ local function onSummary(summary)
 	amounts.StarShards.Text = amounts.StarShards:GetAttribute("Label") .. tostring(summary.StarShards)
 	amounts.StarTokens.Text = ("%s%d/%d"):format(amounts.StarTokens:GetAttribute("Label"), summary.StarTokens,
 		EconomyConfig.TokenExchangeCost)
-	local text = ("Today: %d/%d coins earned"):format(summary.DailyCoinsEarned, summary.DailyCoinCap)
+	amounts.Tickets.Text = amounts.Tickets:GetAttribute("Label") .. tostring(summary.Tickets or 0)
+	local text = ("Today: %d/%d coins earned  |  %d/%d coin packs left"):format(summary.DailyCoinsEarned, summary.DailyCoinCap,
+		summary.CoinPacksLeft or 0, summary.CoinPacksPerDay or 3)
 	if summary.Temporary then
 		text = text .. "  (not saved)"
 	end
@@ -158,7 +182,7 @@ local panel = make("Frame", {
 	Name = "DevPanel",
 	AnchorPoint = Vector2.new(1, 0),
 	Position = UDim2.new(1, -10, 0, 106),
-	Size = UDim2.fromOffset(340, 150),
+	Size = UDim2.fromOffset(340, 182),
 	BackgroundColor3 = Color3.fromRGB(40, 20, 20),
 	BackgroundTransparency = 0.1,
 	Visible = false,
@@ -196,7 +220,7 @@ make("TextLabel", {
 
 local messageLabel = make("TextLabel", {
 	Name = "DevMessage",
-	Position = UDim2.fromOffset(8, 124),
+	Position = UDim2.fromOffset(8, 156),
 	Size = UDim2.new(1, -16, 0, 20),
 	BackgroundTransparency = 1,
 	TextColor3 = Color3.fromRGB(255, 230, 120),
@@ -213,6 +237,7 @@ local buttons = {
 	{ "DevBreakDown", "Break down extras" },
 	{ "DevStarter", "Claim both starters" },
 	{ "DevOdds", "Print odds to Output" },
+	{ "DevTickets", "+5 tickets, +1 box" },
 }
 local made = {}
 for i, info in ipairs(buttons) do
@@ -320,6 +345,11 @@ made.DevOpenShardPack.Activated:Connect(function()
 	else
 		messageLabel.Text = result
 	end
+end)
+
+made.DevTickets.Activated:Connect(function()
+	local ok, result = ask("DevGrantTickets")
+	messageLabel.Text = ok and "+5 pack tickets and a sealed Booster Box" or result
 end)
 
 made.DevCoins.Activated:Connect(function()

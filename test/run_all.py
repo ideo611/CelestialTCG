@@ -81,6 +81,7 @@ do
 	end
 	check("rate limit cuts off a burst of 30 shop requests", refused >= 15, refused)
 	RateLimit.Enabled = false
+	require(RS.EconomyConfig).DailyCoinPacks = 100000 -- (the shop tests open lots of packs)
 end
 local PlayerData = require(SSS.PlayerData)
 local EconomyConfig = require(RS.EconomyConfig)

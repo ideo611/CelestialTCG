@@ -192,6 +192,8 @@ local ENUMS = {
 	ResamplerMode = { "Default", "Pixelated" },
 	UserInputType = { "MouseButton1", "MouseButton2", "Touch", "Keyboard", "MouseMovement", "MouseWheel", "Gamepad1" },
 	AnalyticsCustomFieldKeys = { "CustomField01", "CustomField02", "CustomField03" },
+	ProductPurchaseDecision = { "NotProcessedYet", "PurchaseGranted" },
+	ScrollingDirection = { "X", "Y", "XY" },
 	-- open lists (any name accepted)
 	Font = false, KeyCode = false, Material = false,
 }
@@ -875,6 +877,15 @@ local scriptContext = service("ScriptContext")
 rawget(scriptContext, "__events").Error = Signal.new()
 services.ScriptContext = scriptContext
 
+-- MarketplaceService: records prompts; tests call ProcessReceipt themselves
+M.purchasePrompts = {}
+services.MarketplaceService = {
+	ProcessReceipt = nil,
+	PromptProductPurchase = function(_, player, productId)
+		table.insert(M.purchasePrompts, { Player = player and player.Name, ProductId = productId })
+	end,
+	PromptProductPurchaseFinished = Signal.new(),
+}
 local httpService = service("HttpService")
 rawset(httpService, "__methods", { GenerateGUID = function() return tostring(math.random(1e9)) end })
 services.HttpService = httpService

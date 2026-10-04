@@ -449,11 +449,11 @@ local function createTable(index, position, parent, options)
 				local player = match.Seats[1]
 				if isHuman(player) then
 					local won = battle.Winner == 1
-					PlayerData.SetTutorialDone(player, false)
+					local tutorialTickets = PlayerData.SetTutorialDone(player, false) or 0
 					Analytics.Onboarding(player, "tutorial_finished", "completed")
 					Analytics.Event(player, "tutorial_completed", won and "won" or "lost",
 						math.floor(os.clock() - (match.StartedAt or os.clock())))
-					send(player, { Kind = "TutorialDone", Won = won })
+					send(player, { Kind = "TutorialDone", Won = won, Tickets = tutorialTickets })
 				end
 				task.delay(RESET_DELAY, function()
 					if match.Battle == battle then
@@ -489,11 +489,11 @@ local function createTable(index, position, parent, options)
 					local occupant = match.Seats[seat]
 					if isHuman(occupant) then
 						local won = battle.Winner == seat
-						local coins, bonus = PlayerData.RecordMatch(occupant, won, vsBot, battle.Turn)
+						local coins, bonus, tickets = PlayerData.RecordMatch(occupant, won, vsBot, battle.Turn)
 						local data = PlayerData.Get(occupant)
 						local played = data and (data.Stats.Wins + data.Stats.Losses) or 0
-						send(occupant, { Kind = "Reward", Coins = coins, Bonus = bonus or 0, VsBot = vsBot,
-							Won = won, MatchesPlayed = played })
+						send(occupant, { Kind = "Reward", Coins = coins, Bonus = bonus or 0, Tickets = tickets or 0,
+							VsBot = vsBot, Won = won, MatchesPlayed = played })
 						Analytics.Event(occupant, vsBot and "practice_match_completed" or "pvp_match_completed",
 							(won and "won" or "lost") .. (vsBot and ("_" .. string.lower(match.BotDifficulty or "normal")) or ""),
 							math.floor(duration))

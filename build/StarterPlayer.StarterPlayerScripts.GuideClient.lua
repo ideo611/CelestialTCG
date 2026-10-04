@@ -515,9 +515,10 @@ local function refresh()
 	playButton.Visible = not state.InBattle and ownsStarter(summary)
 	howButton.Visible = not state.InBattle and ownsStarter(summary)
 	firstWinHint.Visible = not state.InBattle and summary ~= nil and summary.FirstWinAvailable == true
-		and (summary.FirstWinBonus or 0) > 0 and (summary.MatchesPlayed or 0) > 0
+		and ((summary.FirstWinBonus or 0) > 0 or (summary.FirstWinTickets or 0) > 0) and (summary.MatchesPlayed or 0) > 0
 	if firstWinHint.Visible then
-		firstWinHint.Text = ("First win: +%d coins"):format(summary.FirstWinBonus)
+		firstWinHint.Text = (summary.FirstWinTickets or 0) > 0 and "First win: free pack ticket"
+			or ("First win: +%d coins"):format(summary.FirstWinBonus)
 	end
 	if not state.InBattle then
 		hudMessage.Visible = hudMessage.Visible and hudMessage.Text ~= ""
@@ -610,13 +611,19 @@ showSummary = function(series)
 	else
 		line = "No coins this time (the daily coin limit was reached, or the match was very short)."
 	end
+	if (series.Tickets or 0) > 0 then
+		line = line .. ("\n+%d Booster Pack Ticket%s for your first win today!"):format(series.Tickets,
+			series.Tickets == 1 and "" or "s")
+	end
 	if series.First then
 		line = line .. "\nCoins buy booster packs at the shop counter."
 	end
 	payoffText.Text = line
-	local canBuy = coins >= price
+	local tickets = summary.Tickets or 0
+	local canBuy = coins >= price or tickets > 0
 	barFill.Size = UDim2.fromScale(math.clamp(coins / price, 0, 1), 1)
-	barText.Text = canBuy and ("%d coins: you can open a pack!"):format(coins)
+	barText.Text = tickets > 0 and ("You have %d pack ticket%s: open a pack!"):format(tickets, tickets == 1 and "" or "s")
+		or (coins >= price and ("%d coins: you can open a pack!"):format(coins))
 		or ("%d / %d coins to your next pack"):format(coins, price)
 	payoffShop.Text = canBuy and "Open a pack" or "My Cards"
 	payoffShop:SetAttribute("CanBuy", canBuy)
@@ -701,14 +708,16 @@ battleUpdate.OnClientEvent:Connect(function(payload)
 			clearGlows()
 			state.Focus = nil
 			boxTitle.Text = payload.Won and "VICTORY!" or "GOOD TRY!"
-			boxText.Text = payload.Won and "That's how it's done, cadet. You're ready for a real match."
-				or "You know the basics now. The bot is waiting whenever you're ready."
+			boxText.Text = (payload.Won and "That's how it's done, cadet. You're ready for a real match."
+				or "You know the basics now. The bot is waiting whenever you're ready.")
+				.. ((payload.Tickets or 0) > 0 and "\nHere's a Booster Pack Ticket: open any pack at the shop!" or "")
 		end
 	elseif payload.Kind == "Reward" then
 		-- add up the games of this match (a best-of series sends one per game)
-		local series = state.Series or { Coins = 0, Bonus = 0, Games = 0 }
+		local series = state.Series or { Coins = 0, Bonus = 0, Tickets = 0, Games = 0 }
 		series.Coins = series.Coins + (payload.Coins or 0)
 		series.Bonus = series.Bonus + (payload.Bonus or 0)
+		series.Tickets = (series.Tickets or 0) + (payload.Tickets or 0)
 		series.Games = series.Games + 1
 		series.Won = payload.Won == true
 		series.First = series.First or (payload.MatchesPlayed or 0) == 1

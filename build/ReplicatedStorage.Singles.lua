@@ -27,7 +27,7 @@ Singles.Mix = {
 	{ Kind = "CommanderOrCelestial", Count = 1 },
 }
 Singles.Discount = 0.5   -- price = expected pack spend x this
-Singles.MinPrice = 40
+Singles.MinPrice = 20
 Singles.RoundTo = 5
 -- A Commander or Celestial never costs more than trading Star Tokens would
 -- (30 tokens = 30 packs), at the same discount

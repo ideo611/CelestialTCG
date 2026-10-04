@@ -11,6 +11,7 @@
 	    so nearby players can watch. Big pulls are announced to the whole server.
 ]]
 
+local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local PolicyService = game:GetService("PolicyService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -300,6 +301,43 @@ function handlers.BuyPack(player, args)
 	end
 	offers[player] = nil
 	return true, { PackType = packTypeId, Front = front, Pulls = pulls }
+end
+
+-- Robux products: what's for sale and whether this player can buy them
+-- (tickets and boxes hold random cards, so they're blocked where paid random
+-- items are restricted)
+function handlers.GetProducts(player)
+	local restricted = PlayerData.IsRestricted(player)
+	local list = {}
+	for _, key in ipairs(EconomyConfig.ProductOrder) do
+		local product = EconomyConfig.Products[key]
+		table.insert(list, {
+			Key = key,
+			Name = product.Name,
+			Robux = product.Robux,
+			Ready = product.ProductId ~= 0,
+		})
+	end
+	return true, { Products = list, Restricted = restricted }
+end
+
+function handlers.BuyProduct(player, args)
+	local product = type(args.Product) == "string" and EconomyConfig.Products[args.Product]
+	if not product then
+		return false, "Unknown item."
+	end
+	if product.ProductId == 0 then
+		return false, "Coming soon!"
+	end
+	if PlayerData.IsRestricted(player) then
+		return false, "Booster tickets and boxes can't be bought in your region. You can still earn packs by playing."
+	end
+	MarketplaceService:PromptProductPurchase(player, product.ProductId)
+	return true
+end
+
+function handlers.OpenBox(player, args)
+	return PlayerData.OpenBox(player, args.PackType)
 end
 
 function handlers.GetSingles(player)

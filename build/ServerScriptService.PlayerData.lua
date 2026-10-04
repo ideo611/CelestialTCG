@@ -8,9 +8,21 @@
 	Saving needs the place published with "Studio Access to API Services"
 	turned on. Without it, in Studio, players get temporary data that isn't
 	saved (you'll see a warning in Output), so you can still test.
+
+	KEEPING PLAYERS' DATA SAFE (players can spend Robux, so this matters):
+	  - Never rename STORE_NAME: that would start everyone from nothing.
+	    New features add fields to defaultData(); old saves get them filled in
+	    when they load (reconcile), so updates never wipe anything.
+	  - Session lock: a save belongs to one server at a time. When a player
+	    hops servers, the new server waits (up to ~15 s) for the old one to
+	    save and let go, so an old save can't land on top of newer data. A
+	    lock older than LOCK_STALE_SECONDS (a crashed server) is taken over.
+	  - Robux purchases are recorded by purchase id in the save (Purchases),
+	    so a purchase is granted exactly once (see PurchaseServer).
 ]]
 
 local DataStoreService = game:GetService("DataStoreService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
@@ -22,6 +34,11 @@ local Analytics = require(game:GetService("ServerScriptService"):WaitForChild("A
 
 local STORE_NAME = "PlayerData_v2" -- LAUNCH: fresh store; playtest saves stay in PlayerData_v1
 local LOAD_RETRIES = 3
+local LOCK_WAIT_TRIES = 5          -- tries (3 s apart) waiting for another server to let go of a save
+local LOCK_STALE_SECONDS = 1800    -- a lock this old belongs to a server that crashed
+local PURCHASE_LOG_SIZE = 200      -- how many Robux purchase ids each save remembers
+-- This server's id (its lock on the saves it holds)
+local SESSION = (game.JobId ~= "" and game.JobId or ("local-" .. tostring(math.random(1, 1e9))))
 local DATA_VERSION = 1
 -- Bump when starter deck lists change: players who own a starter get any
 -- cards the new list has that they're missing.
@@ -76,6 +93,11 @@ local function defaultData()
 			FirstWinDay = 0,          -- the UTC day the first-win bonus was last paid
 			Logged = {},              -- onboarding analytics steps already sent
 		},
+		Tickets = 0,            -- Booster Pack Tickets: open any pack, no daily limit, never expire
+		SealedBoxes = 0,        -- Booster Boxes bought and not opened yet (faction picked when opening)
+		CoinPacksDay = 0,       -- the UTC day CoinPacksToday belongs to
+		CoinPacksToday = 0,     -- packs bought with coins today (limited per day)
+		Purchases = {},         -- Robux purchases already granted: list of { Id, Product, Time }
 		Settings = {            -- battle screen settings, kept between visits
 			AnimSpeed = 1,      -- 1 Normal, 2 Fast, 0 Off
 			Sound = true,
@@ -178,24 +200,68 @@ local function keyFor(player)
 	return "u_" .. tostring(player.UserId)
 end
 
+local function now()
+	return os.time()
+end
+
+-- Reads the save and takes this server's lock on it. Returns
+-- ok, data (nil for a brand-new player), lockedBy (another server holding it)
+local function loadAndLock(ds, key, steal)
+	local lockedBy = nil
+	local result
+	local ok, err = pcall(function()
+		ds:UpdateAsync(key, function(old)
+			lockedBy = nil
+			if type(old) == "table" and type(old.SessionLock) == "table" then
+				local lock = old.SessionLock
+				local fresh = now() - (tonumber(lock.Time) or 0) < LOCK_STALE_SECONDS
+				if lock.Id ~= SESSION and fresh and not steal then
+					lockedBy = lock.Id
+					return nil -- leave it alone; we'll try again in a moment
+				end
+			end
+			local data = type(old) == "table" and old or nil
+			result = data
+			local stored = data or {}
+			stored.SessionLock = { Id = SESSION, Time = now() }
+			return stored
+		end)
+	end)
+	if not ok then
+		return false, err
+	end
+	return true, result, lockedBy
+end
+
 -- Returns true if loaded. On failure outside Studio the player is kicked,
 -- because giving them blank data could overwrite their real save.
 function PlayerData.Load(player)
 	local data, loaded = nil, false
 	local ds = getStore()
 	if ds then
-		for attempt = 1, LOAD_RETRIES do
-			local ok, result = pcall(function()
-				return ds:GetAsync(keyFor(player))
-			end)
-			if ok then
+		local failures, lockWaits = 0, 0
+		while not loaded do
+			local ok, result, lockedBy = loadAndLock(ds, keyFor(player), lockWaits >= LOCK_WAIT_TRIES)
+			if ok and not lockedBy then
 				data = result
 				loaded = true
-				break
-			end
-			warn(("PlayerData: load attempt %d for %s failed: %s"):format(attempt, player.Name, tostring(result)))
-			if attempt < LOAD_RETRIES then
+			elseif ok then
+				-- another server still has this save (they just hopped): wait for it to let go
+				lockWaits = lockWaits + 1
+				if lockWaits >= LOCK_WAIT_TRIES then
+					warn(("PlayerData: %s's save is still held by another server; taking it over."):format(player.Name))
+				end
+				task.wait(3)
+			else
+				failures = failures + 1
+				warn(("PlayerData: load attempt %d for %s failed: %s"):format(failures, player.Name, tostring(result)))
+				if failures >= LOAD_RETRIES then
+					break
+				end
 				task.wait(2)
+			end
+			if not player.Parent then
+				return false -- they left while we waited
 			end
 		end
 	end
@@ -231,28 +297,49 @@ function PlayerData.Load(player)
 	return true
 end
 
-function PlayerData.Save(player)
+-- Saves the player's data. release = true also lets go of the lock (they left).
+-- Returns true if the save went through.
+function PlayerData.Save(player, release)
 	local profile = profiles[player]
 	if not profile or profile.Temporary then
 		return true
+	end
+	if profile.LostLock then
+		return false
 	end
 	local ds = getStore()
 	if not ds then
 		return false
 	end
+	local lost = false
 	local ok, err = pcall(function()
-		ds:UpdateAsync(keyFor(player), function()
+		ds:UpdateAsync(keyFor(player), function(old)
+			lost = false
+			if type(old) == "table" and type(old.SessionLock) == "table" and old.SessionLock.Id ~= SESSION then
+				lost = true -- another server took this save over: don't overwrite its newer data
+				return nil
+			end
+			profile.Data.SessionLock = (not release) and { Id = SESSION, Time = now() } or nil
 			return profile.Data
 		end)
 	end)
 	if not ok then
 		warn(("PlayerData: save for %s failed: %s"):format(player.Name, tostring(err)))
+		return false
 	end
-	return ok
+	if lost then
+		profile.LostLock = true
+		warn(("PlayerData: %s's save was taken over by another server; this server stops saving it."):format(player.Name))
+		if player.Parent then
+			player:Kick("Your cards were opened on another server. Please rejoin.")
+		end
+		return false
+	end
+	return true
 end
 
 function PlayerData.Release(player)
-	PlayerData.Save(player)
+	PlayerData.Save(player, true)
 	profiles[player] = nil
 end
 
@@ -425,22 +512,27 @@ function PlayerData.FirstWinAvailable(data)
 	return data ~= nil and (data.Onboarding.FirstWinDay or 0) ~= today()
 end
 
+-- First win of the day: a Booster Pack Ticket (EconomyConfig.FirstWinTickets),
+-- plus any bonus coins (FirstWinBonusCoins, 0 now). Returns coins, tickets paid.
 local function payFirstWin(player, data)
+	local tickets = EconomyConfig.FirstWinTickets or 0
 	local bonus = EconomyConfig.FirstWinBonusCoins or 0
-	if bonus <= 0 or not PlayerData.FirstWinAvailable(data) then
-		return 0
+	if (bonus <= 0 and tickets <= 0) or not PlayerData.FirstWinAvailable(data) then
+		return 0, 0
 	end
 	data.Onboarding.FirstWinDay = today()
 	data.Coins = data.Coins + bonus
-	Analytics.Event(player, "first_win_bonus", nil, bonus)
-	return bonus
+	data.Tickets = (data.Tickets or 0) + tickets
+	Analytics.Event(player, "first_win_bonus", tickets > 0 and "ticket" or "coins", tickets > 0 and tickets or bonus)
+	return bonus, tickets
 end
 
--- Called when a match ends. Returns coins given, then the first-win bonus paid.
+-- Called when a match ends. Returns coins given, the first-win bonus coins,
+-- then first-win tickets.
 function PlayerData.RecordMatch(player, won, vsBot, turns)
 	local data = PlayerData.Get(player)
 	if not data then
-		return 0, 0
+		return 0, 0, 0
 	end
 	local rewards = EconomyConfig.MatchRewards
 	if won then
@@ -450,7 +542,7 @@ function PlayerData.RecordMatch(player, won, vsBot, turns)
 	end
 	if turns < rewards.MinTurns then
 		changed(player)
-		return 0, 0
+		return 0, 0, 0
 	end
 	local amount
 	if vsBot then
@@ -459,9 +551,12 @@ function PlayerData.RecordMatch(player, won, vsBot, turns)
 		amount = won and rewards.PvPWin or rewards.PvPLoss
 	end
 	local given = PlayerData.AddEarnedCoins(player, amount)
-	local bonus = won and payFirstWin(player, data) or 0
+	local bonus, tickets = 0, 0
+	if won then
+		bonus, tickets = payFirstWin(player, data)
+	end
 	changed(player)
-	return given, bonus
+	return given, bonus, tickets
 end
 
 -- Onboarding progress: the tutorial
@@ -472,7 +567,15 @@ function PlayerData.SetTutorialDone(player, skipped)
 	end
 	data.Onboarding.TutorialDone = true
 	data.Onboarding.TutorialSkipped = skipped == true
+	-- finishing it (not skipping) earns a ticket, once
+	local reward = 0
+	if not skipped and not data.Onboarding.TutorialRewarded then
+		data.Onboarding.TutorialRewarded = true
+		reward = EconomyConfig.TutorialTickets or 0
+		data.Tickets = (data.Tickets or 0) + reward
+	end
 	changed(player)
+	return reward
 end
 
 -- Counts a real match starting; returns how many this player has started (1 = their first)
@@ -486,8 +589,38 @@ function PlayerData.NoteMatchStarted(player)
 end
 
 ---------------------------------------------------------------------
+-- Daily coin-pack limit (tickets and Star Shards don't count)
+---------------------------------------------------------------------
+function PlayerData.CoinPacksLeft(data)
+	local day = today()
+	if data.CoinPacksDay ~= day then
+		data.CoinPacksDay = day
+		data.CoinPacksToday = 0
+	end
+	return math.max(0, (EconomyConfig.DailyCoinPacks or 3) - data.CoinPacksToday)
+end
+
+-- Rolls one pack into the collection. Returns its pulls.
+local function rollPackInto(data, packTypeId)
+	local pulls = Packs.Roll(rng, packTypeId, function(cardId, finish)
+		if finish then
+			local entry = data.Collection[cardId]
+			return entry ~= nil and (entry[finish] or 0) > 0
+		end
+		return PlayerData.CountOwned(data, cardId) > 0
+	end)
+	for _, pull in ipairs(pulls) do
+		pull.New = PlayerData.CountOwned(data, pull.CardId) == 0
+		addCopies(data, pull.CardId, pull.Finish, 1)
+	end
+	data.StarTokens = data.StarTokens + EconomyConfig.TokensPerPack
+	data.PacksOpened = data.PacksOpened + 1
+	return pulls
+end
+
+---------------------------------------------------------------------
 -- Packs
--- currency = "Coins" or "Shards". Returns ok, pulls-or-message.
+-- currency = "Coins", "Ticket" or "Shards". Returns ok, pulls-or-message.
 ---------------------------------------------------------------------
 function PlayerData.OpenPack(player, currency, packTypeId)
 	local data = PlayerData.Get(player)
@@ -502,10 +635,20 @@ function PlayerData.OpenPack(player, currency, packTypeId)
 		if EconomyConfig.CoinsSoldForRobux and PlayerData.IsRestricted and PlayerData.IsRestricted(player) then
 			return false, "Packs can't be bought with coins in your region. You can still open packs with Star Shards."
 		end
+		if PlayerData.CoinPacksLeft(data) <= 0 then
+			return false, ("You've bought your %d coin packs for today. Use a ticket or come back tomorrow!")
+				:format(EconomyConfig.DailyCoinPacks)
+		end
 		if data.Coins < EconomyConfig.PackPriceCoins then
 			return false, ("You need %d coins."):format(EconomyConfig.PackPriceCoins)
 		end
 		data.Coins = data.Coins - EconomyConfig.PackPriceCoins
+		data.CoinPacksToday = data.CoinPacksToday + 1
+	elseif currency == "Ticket" then
+		if (data.Tickets or 0) < 1 then
+			return false, "You don't have a Booster Pack Ticket."
+		end
+		data.Tickets = data.Tickets - 1
 	elseif currency == "Shards" then
 		if data.StarShards < EconomyConfig.PackPriceShards then
 			return false, ("You need %d Star Shards."):format(EconomyConfig.PackPriceShards)
@@ -515,19 +658,7 @@ function PlayerData.OpenPack(player, currency, packTypeId)
 		return false, "Pick how to pay."
 	end
 
-	local pulls = Packs.Roll(rng, packTypeId, function(cardId, finish)
-		if finish then
-			local entry = data.Collection[cardId]
-			return entry ~= nil and (entry[finish] or 0) > 0
-		end
-		return PlayerData.CountOwned(data, cardId) > 0
-	end)
-	for _, pull in ipairs(pulls) do
-		pull.New = PlayerData.CountOwned(data, pull.CardId) == 0
-		addCopies(data, pull.CardId, pull.Finish, 1)
-	end
-	data.StarTokens = data.StarTokens + EconomyConfig.TokensPerPack
-	data.PacksOpened = data.PacksOpened + 1
+	local pulls = rollPackInto(data, packTypeId)
 	changed(player)
 	PlayerData.Save(player) -- pack results are saved right away
 	Analytics.Event(player, "pack_opened", packTypeId .. ":" .. currency)
@@ -536,6 +667,113 @@ function PlayerData.OpenPack(player, currency, packTypeId)
 		task.spawn(PlayerData.PackOpened, player, pulls)
 	end
 	return true, pulls
+end
+
+---------------------------------------------------------------------
+-- Booster Boxes: bought sealed (with Robux), opened later. Opening one
+-- picks the booster (faction) and opens EconomyConfig.Box.Packs packs of it
+-- at once, plus a box topper: a Commander or Celestial from that booster in
+-- a shiny finish. Returns ok, { PackType, Packs = { pulls, ... }, Topper }.
+---------------------------------------------------------------------
+function PlayerData.OpenBox(player, packTypeId)
+	local data = PlayerData.Get(player)
+	if not data then
+		return false, "Your cards haven't loaded yet."
+	end
+	if (data.SealedBoxes or 0) < 1 then
+		return false, "You don't have a sealed Booster Box."
+	end
+	local packType = type(packTypeId) == "string" and EconomyConfig.GetPackType(packTypeId)
+	if not packType then
+		return false, "Pick which booster the box holds."
+	end
+	data.SealedBoxes = data.SealedBoxes - 1
+	local box = EconomyConfig.Box
+	local opened = {}
+	for i = 1, box.Packs do
+		opened[i] = rollPackInto(data, packType.Id)
+	end
+	-- the topper: a Commander or Celestial, preferring ones they don't have yet
+	local pool = Packs.GetPools(packType.Id).CommanderOrCelestial
+	local missing = {}
+	for _, id in ipairs(pool) do
+		if PlayerData.CountOwned(data, id) == 0 then
+			table.insert(missing, id)
+		end
+	end
+	local choices = #missing > 0 and missing or pool
+	local cardId = choices[rng(#choices)]
+	local roll, finish = rng(10000), box.TopperFinishes[#box.TopperFinishes].Finish
+	local cumulative = 0
+	for _, entry in ipairs(box.TopperFinishes) do
+		cumulative = cumulative + entry.Chance * 100
+		if roll <= cumulative then
+			finish = entry.Finish
+			break
+		end
+	end
+	local topper = { CardId = cardId, Finish = finish, Pool = "CommanderOrCelestial", Slot = "Box topper",
+		New = PlayerData.CountOwned(data, cardId) == 0 }
+	addCopies(data, cardId, finish, 1)
+	data.BoxesOpened = (data.BoxesOpened or 0) + 1
+	changed(player)
+	PlayerData.Save(player)
+	Analytics.Event(player, "box_opened", packType.Id)
+	if PlayerData.PackOpened then
+		-- above their head: the topper, then any Legendary or Mythic pulls
+		local highlights = { topper }
+		for _, pulls in ipairs(opened) do
+			for _, pull in ipairs(pulls) do
+				if pull.Pool == "LegendaryDeckCard" or pull.Pool == "CommanderOrCelestial" or pull.Pool == "Mythic" then
+					table.insert(highlights, pull)
+				end
+			end
+		end
+		while #highlights > 8 do
+			table.remove(highlights)
+		end
+		task.spawn(PlayerData.PackOpened, player, highlights)
+	end
+	return true, { PackType = packType.Id, Packs = opened, Topper = topper }
+end
+
+---------------------------------------------------------------------
+-- Robux purchases (called by PurchaseServer's ProcessReceipt).
+-- Grants a product once per purchase id. Returns:
+--   "granted"  newly granted (save it, then confirm the purchase)
+--   "already"  this purchase was granted before
+--   nil, message  couldn't grant (unknown product / not loaded)
+---------------------------------------------------------------------
+function PlayerData.HasPurchase(data, purchaseId)
+	for _, entry in ipairs(data.Purchases or {}) do
+		if entry.Id == purchaseId then
+			return true
+		end
+	end
+	return false
+end
+
+function PlayerData.GrantPurchase(player, purchaseId, productKey)
+	local data = PlayerData.Get(player)
+	if not data then
+		return nil, "not loaded"
+	end
+	local product = EconomyConfig.Products[productKey]
+	if not product then
+		return nil, "unknown product " .. tostring(productKey)
+	end
+	if PlayerData.HasPurchase(data, purchaseId) then
+		return "already"
+	end
+	data.Tickets = (data.Tickets or 0) + (product.Tickets or 0)
+	data.SealedBoxes = (data.SealedBoxes or 0) + (product.Boxes or 0)
+	data.RobuxSpent = (data.RobuxSpent or 0) + (product.Robux or 0)
+	table.insert(data.Purchases, { Id = purchaseId, Product = productKey, Time = os.time() })
+	while #data.Purchases > PURCHASE_LOG_SIZE do
+		table.remove(data.Purchases, 1)
+	end
+	changed(player)
+	return "granted"
 end
 
 ---------------------------------------------------------------------
@@ -775,6 +1013,18 @@ function PlayerData.DeckFinishes(data, deck)
 		end
 	end
 	return result
+end
+
+-- Studio testing only: 5 tickets and a sealed box (no Robux involved)
+function PlayerData.DevGrantTickets(player)
+	local data = PlayerData.Get(player)
+	if not data then
+		return false, "Your cards haven't loaded yet."
+	end
+	data.Tickets = (data.Tickets or 0) + 5
+	data.SealedBoxes = (data.SealedBoxes or 0) + 1
+	changed(player)
+	return true
 end
 
 -- Studio testing only (PlayerDataServer only allows it in Studio): one more
@@ -1065,6 +1315,11 @@ function PlayerData.GetSummary(player)
 		MatchesPlayed = data.Stats.Wins + data.Stats.Losses,
 		FirstWinAvailable = PlayerData.FirstWinAvailable(data),
 		FirstWinBonus = EconomyConfig.FirstWinBonusCoins or 0,
+		FirstWinTickets = EconomyConfig.FirstWinTickets or 0,
+		Tickets = data.Tickets or 0,
+		SealedBoxes = data.SealedBoxes or 0,
+		CoinPacksLeft = PlayerData.CoinPacksLeft(data),
+		CoinPacksPerDay = EconomyConfig.DailyCoinPacks,
 	}
 end
 

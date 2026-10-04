@@ -12,8 +12,9 @@ local EconomyConfig = {}
 ---------------------------------------------------------------------
 -- Coins
 ---------------------------------------------------------------------
-EconomyConfig.PackPriceCoins = 100
-EconomyConfig.DailyCoinCap = 100       -- most coins you can earn from matches per day (~1 pack)
+EconomyConfig.PackPriceCoins = 50
+EconomyConfig.DailyCoinCap = 150       -- most coins you can earn from matches per day (3 packs)
+EconomyConfig.DailyCoinPacks = 3       -- packs you can buy with coins per day (tickets and Star Shards don't count)
 EconomyConfig.CoinCapMultiplier = 1    -- set to 2 during a special event to double the cap
 EconomyConfig.StartingCoins = 100      -- new players can open one pack right away
 
@@ -23,7 +24,7 @@ EconomyConfig.StartingCoins = 100      -- new players can open one pack right aw
 EconomyConfig.PlaytestCoins = 0 -- LAUNCH: no test coins (was 5000 for playtesting)
 
 -- Starter decks: a new player's first one is free, the rest cost coins
-EconomyConfig.StarterDeckPriceCoins = 300
+EconomyConfig.StarterDeckPriceCoins = 150
 
 -- Turn on once coins can be bought with Robux. Coin-bought packs then count as
 -- paid random items, and players whose region restricts them (PolicyService
@@ -31,16 +32,54 @@ EconomyConfig.StarterDeckPriceCoins = 300
 -- They can still earn packs through Star Shards.
 EconomyConfig.CoinsSoldForRobux = false
 
--- First win of each day (UTC) pays this bonus on top of the match reward.
--- It doesn't count toward the daily cap. (Planned: becomes a Booster Pack Ticket.)
-EconomyConfig.FirstWinBonusCoins = 50
+-- First win of each day (UTC) pays a Booster Pack Ticket on top of the match
+-- reward (and FirstWinBonusCoins, now 0). Neither counts toward the daily cap.
+EconomyConfig.FirstWinTickets = 1
+EconomyConfig.FirstWinBonusCoins = 0
+-- Finishing the tutorial (not skipping it) pays this many tickets, once
+EconomyConfig.TutorialTickets = 1
 
 EconomyConfig.MatchRewards = {
-	PvPWin = 50,
-	PvPLoss = 25,
-	BotWin = 25,
-	BotLoss = 10,
+	PvPWin = 10,
+	PvPLoss = 5,
+	BotWin = 10,
+	BotLoss = 5,
 	MinTurns = 6, -- matches shorter than this pay nothing (stops quick-concede farming)
+}
+
+---------------------------------------------------------------------
+-- Robux products (Developer Products). Create each one in the Creator
+-- Dashboard (Monetization > Developer Products) and paste its Product ID.
+-- ProductId 0 = not set up yet: the shop shows "coming soon" for it.
+-- Booster Pack Tickets open any booster, don't count toward the daily coin
+-- pack limit, and never expire. A Booster Box is kept sealed until opened.
+---------------------------------------------------------------------
+EconomyConfig.Products = {
+	Ticket1 = { ProductId = 0, Robux = 49, Tickets = 1, Name = "1 Booster Pack Ticket" },
+	Ticket5 = { ProductId = 0, Robux = 199, Tickets = 5, Name = "5 Booster Pack Tickets" },
+	BoosterBox = { ProductId = 0, Robux = 449, Boxes = 1, Name = "Booster Box" },
+}
+EconomyConfig.ProductOrder = { "Ticket1", "Ticket5", "BoosterBox" }
+
+function EconomyConfig.ProductKeyForId(productId)
+	for key, product in pairs(EconomyConfig.Products) do
+		if product.ProductId ~= 0 and product.ProductId == productId then
+			return key
+		end
+	end
+	return nil
+end
+
+-- A Booster Box: this many packs of one booster (picked when opening), plus a
+-- box topper: a Commander or Celestial (one you don't own yet if possible)
+-- in a shiny finish
+EconomyConfig.Box = {
+	Packs = 12,
+	TopperFinishes = {
+		{ Finish = "Holo", Chance = 60 },
+		{ Finish = "Textured", Chance = 30 },
+		{ Finish = "3D", Chance = 10 },
+	},
 }
 
 ---------------------------------------------------------------------

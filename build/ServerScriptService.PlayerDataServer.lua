@@ -68,8 +68,18 @@ end)
 
 -- Save everyone when the server shuts down
 game:BindToClose(function()
+	-- save and let go of everyone's save (in parallel: shutdown has ~30 s)
+	local pending = 0
 	for _, player in ipairs(Players:GetPlayers()) do
-		PlayerData.Save(player)
+		pending = pending + 1
+		task.spawn(function()
+			PlayerData.Save(player, true)
+			pending = pending - 1
+		end)
+	end
+	local started = os.clock()
+	while pending > 0 and os.clock() - started < 25 do
+		task.wait(0.1)
 	end
 end)
 
@@ -161,6 +171,11 @@ local studioHandlers = {}
 
 function studioHandlers.DevGrantCoins(player)
 	return true, PlayerData.GrantCoins(player, 500)
+end
+
+-- (lets you try tickets and boxes in Studio without spending Robux)
+function studioHandlers.DevGrantTickets(player)
+	return PlayerData.DevGrantTickets(player)
 end
 
 function studioHandlers.DevGrantAllFinishes(player)

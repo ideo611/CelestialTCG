@@ -659,6 +659,34 @@ do
 			resultBanner.Size = UDim2.fromScale(0.3, 0.12)
 			TweenService:Create(resultBanner, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
 				{ Size = UDim2.fromScale(0.5, 0.2) }):Play()
+			-- a short burst of light behind the banner (gold for a win, a cool fade for a loss)
+			local won = kind == "Victory"
+			local glow = make("Frame", {
+				Name = "ResultFlash",
+				Size = UDim2.fromScale(1, 1),
+				BackgroundColor3 = won and Color3.fromRGB(255, 215, 120) or Color3.fromRGB(20, 20, 50),
+				BackgroundTransparency = won and 0.55 or 0.4,
+				BorderSizePixel = 0,
+				ZIndex = 4,
+			}, root)
+			TweenService:Create(glow, TweenInfo.new(won and 0.7 or 1.2), { BackgroundTransparency = 1 }):Play()
+			task.delay(1.3, function()
+				glow:Destroy()
+			end)
+			if won then
+				UiAssets.PlayFlipbook(root, UiAssets.Vfx.LegendaryPull, {
+					Position = UDim2.fromScale(0.44, 0.18),
+					Size = UDim2.fromScale(0.42, 0.42),
+					Duration = 1.1,
+					ZIndex = 4,
+				})
+				UiAssets.PlayFlipbook(root, UiAssets.Vfx.ImpactBurst, {
+					Position = UDim2.fromScale(0.44, 0.18),
+					Size = UDim2.fromScale(0.3, 0.3),
+					Duration = 0.6,
+					ZIndex = 6,
+				})
+			end
 		end
 	end
 end
@@ -2155,6 +2183,41 @@ function playEvent.CelestialSummoned(e)
 	playSound("CelestialSummon")
 	flash(gate, GOLD, 0.8)
 	pause(0.25)
+	-- the signature moment: the board darkens and the Celestial appears huge
+	-- before it lands (about a second at normal speed)
+	local dim = make("Frame", {
+		Name = "SummonDim",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ZIndex = 16,
+	}, fxLayer)
+	tween(dim, 0.2, { BackgroundTransparency = 0.45 })
+	local showcase = make("Frame", {
+		Name = "SummonShowcase",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.44, 0.4),
+		Size = UDim2.fromScale(0.3, 0.45),
+		BackgroundTransparency = 1,
+		ZIndex = 18,
+	}, fxLayer)
+	make("UIAspectRatioConstraint", { AspectRatio = CARD_ASPECT }, showcase)
+	local showcaseScale = make("UIScale", { Scale = 0.7 }, showcase)
+	CardVisuals.Draw(showcase, e.CardId, { Finish = finishFor(side, e.CardId) })
+	for _, d in ipairs(showcase:GetDescendants()) do
+		if d:IsA("GuiObject") then
+			d.ZIndex = d.ZIndex + 18
+		end
+	end
+	playEvent._fx(nil, "SummonPillar", 1, { Position = UDim2.fromScale(0.44, 0.4), Size = 0.75, Duration = 0.9, ZIndex = 17 })
+	tween(showcaseScale, 0.35, { Scale = 1.05 }, Enum.EasingStyle.Back)
+	pause(0.75)
+	tween(showcaseScale, 0.2, { Scale = 0.3 })
+	tween(dim, 0.25, { BackgroundTransparency = 1 })
+	pause(0.18)
+	showcase:Destroy()
+	cleanup(dim, 0.3)
 	local white = make("Frame", {
 		Name = "SummonFlash",
 		Size = UDim2.fromScale(1, 1),
@@ -2205,6 +2268,9 @@ function playEvent._fx(slot, key, size, options)
 		return
 	end
 	local h = (base and base.H or 0.55) * (size or 1.2)
+	if not base and options.Size then
+		h = options.Size -- (a screen-position effect: Size is its height as a share of the screen)
+	end
 	UiAssets.PlayFlipbook(fxLayer, UiAssets.Vfx[key], {
 		Position = options.Position or UDim2.fromScale(base.X, base.Y),
 		Size = UDim2.fromScale(h, h),

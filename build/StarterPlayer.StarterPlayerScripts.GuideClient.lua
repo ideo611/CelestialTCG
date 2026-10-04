@@ -269,7 +269,9 @@ make("UICorner", { CornerRadius = UDim.new(0, 10) }, box)
 make("UIStroke", { Color = GOLD, Thickness = 3 }, box)
 text(box, "TutorialSpeaker", UDim2.fromScale(0.05, 0.02), UDim2.fromScale(0.9, 0.1), "Captain Sol Varro",
 	{ TextColor3 = GOLD, ZIndex = 21 })
-local boxText = text(box, "TutorialText", UDim2.fromScale(0.05, 0.13), UDim2.fromScale(0.9, 0.66), "",
+local boxTitle = text(box, "TutorialTitle", UDim2.fromScale(0.05, 0.14), UDim2.fromScale(0.9, 0.2), "",
+	{ Font = Enum.Font.GothamBlack, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 21 })
+local boxText = text(box, "TutorialText", UDim2.fromScale(0.05, 0.37), UDim2.fromScale(0.9, 0.42), "",
 	{ Font = Enum.Font.Gotham, TextYAlignment = Enum.TextYAlignment.Top, TextXAlignment = Enum.TextXAlignment.Left,
 		ZIndex = 21 })
 local boxNext = button(box, "TutorialNext", "Next", UDim2.fromScale(0.05, 0.82), UDim2.fromScale(0.42, 0.14))
@@ -307,9 +309,78 @@ local function glow(names)
 	end
 end
 
+-- Spotlight: during a tutorial step, everything except the step's targets is
+-- dimmed (four dark panels around them) and taps outside them are blocked.
+-- The tutorial box stays on top and usable.
+-- a full-screen reference: target positions are measured relative to it, so
+-- the screens' top-bar insets never throw the hole off
+local spotlightRoot = make("Frame", {
+	Name = "SpotlightRoot",
+	Size = UDim2.fromScale(1, 1),
+	BackgroundTransparency = 1,
+}, gui)
+local shades = {}
+for i = 1, 4 do
+	shades[i] = make("Frame", {
+		Name = "TutorialShade" .. i,
+		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+		BackgroundTransparency = 0.45,
+		BorderSizePixel = 0,
+		Active = true, -- swallows taps
+		Visible = false,
+		ZIndex = 15,
+	}, spotlightRoot)
+end
+
+local function focusRect()
+	local bg = battleGui()
+	if not (bg and bg.Enabled and state.Focus) then
+		return nil
+	end
+	local x0, y0, x1, y1 = math.huge, math.huge, -math.huge, -math.huge
+	for _, name in ipairs(state.Focus) do
+		local target = bg:FindFirstChild(name, true)
+		if target and target:IsA("GuiObject") and target.Visible then
+			local ok, pos, size = pcall(function()
+				return target.AbsolutePosition, target.AbsoluteSize
+			end)
+			if ok and pos and size and size.X > 0 then
+				x0, y0 = math.min(x0, pos.X), math.min(y0, pos.Y)
+				x1, y1 = math.max(x1, pos.X + size.X), math.max(y1, pos.Y + size.Y)
+			end
+		end
+	end
+	if x0 == math.huge then
+		return nil
+	end
+	local origin = spotlightRoot.AbsolutePosition
+	x0, x1, y0, y1 = x0 - origin.X, x1 - origin.X, y0 - origin.Y, y1 - origin.Y
+	local pad = 8
+	return x0 - pad, y0 - pad, x1 + pad, y1 + pad
+end
+
+local function updateSpotlight()
+	local x0, y0, x1, y1 = focusRect()
+	if not x0 then
+		for _, shade in ipairs(shades) do
+			shade.Visible = false
+		end
+		return
+	end
+	-- top, bottom, left, right of the lit area (pixels; the guide and battle screens share an origin)
+	shades[1].Position, shades[1].Size = UDim2.fromOffset(0, 0), UDim2.new(1, 0, 0, math.max(0, y0))
+	shades[2].Position, shades[2].Size = UDim2.fromOffset(0, y1), UDim2.new(1, 0, 1, -y1)
+	shades[3].Position, shades[3].Size = UDim2.fromOffset(0, y0), UDim2.fromOffset(math.max(0, x0), y1 - y0)
+	shades[4].Position, shades[4].Size = UDim2.fromOffset(x1, y0), UDim2.new(1, -x1, 0, y1 - y0)
+	for _, shade in ipairs(shades) do
+		shade.Visible = true
+	end
+end
+
 -- Pulse the glows
 RunService.Heartbeat:Connect(function()
 	local t = os.clock()
+	updateSpotlight()
 	for _, g in ipairs(glows) do
 		local stroke = g:FindFirstChild("GlowStroke")
 		if stroke then
@@ -324,28 +395,32 @@ end)
 	"final"  until the match ends
 	Until = an event of yours that finishes the step early ]]
 local STEPS = {
-	{ Id = "intro", Kind = "mine", Next = true,
-		Text = "Welcome aboard, cadet! That's Tidekeeper Selene across the table. Knock her Commander from 12 HP down to 0 to win!" },
+	{ Id = "intro", Kind = "mine", Next = true, Focus = { "EnemyCommander" },
+		Title = "BEAT SELENE", Text = "Knock her Commander from 12 HP down to 0." },
 	{ Id = "play_unit", Kind = "mine", Until = "UnitPlayed", Glow = { "Hand" },
-		Text = "Your cards are at the bottom. Tap a Sunforge Cadet, then tap one of your empty lanes to play it.\n\nIt costs 2 energy, and you have 2." },
-	{ Id = "end_turn", Kind = "mine", Glow = { "EndTurnButton" },
-		Text = "Nice! New units wait a turn before they can attack.\n\nTap End Turn." },
+		Focus = { "Hand", "Slot_Self_1", "Slot_Self_2", "Slot_Self_3" },
+		Title = "PLAY A UNIT", Text = "Tap a card, then tap one of your lanes." },
+	{ Id = "end_turn", Kind = "mine", Glow = { "EndTurnButton" }, Focus = { "EndTurnButton" },
+		Title = "END YOUR TURN", Text = "New units attack starting next turn." },
 	{ Id = "their_turn", Kind = "theirs",
-		Text = "Now it's Selene's turn. Watch what she plays..." },
+		Title = "SELENE'S TURN", Text = "Watch what she plays." },
 	{ Id = "lanes", Kind = "mine", Glow = { "Slot_Self_1", "Slot_Self_2", "Slot_Self_3" },
-		Text = "Each lane fights the lane straight across. When you end your turn, your units attack the enemy across from them. An empty lane? It hits Selene directly!\n\nYou get 1 more energy every turn. Play a unit, then End Turn." },
+		Focus = { "Hand", "Slot_Self_1", "Slot_Self_2", "Slot_Self_3", "Slot_Enemy_1", "Slot_Enemy_2", "Slot_Enemy_3", "EndTurnButton" },
+		Title = "LANES FIGHT", Text = "Units hit the lane straight across. Empty lane? It hits Selene! Play a unit, then End Turn." },
 	{ Id = "their_turn2", Kind = "theirs",
-		Text = "Selene's turn again. Units that lose all their HP are defeated." },
+		Title = "SELENE'S TURN", Text = "Units with 0 Health are defeated." },
 	{ Id = "ability", Kind = "mine", Until = "CommanderAbility", Glow = { "AbilityButton" },
-		Text = "Your Commander has a power! Tap Ability, then one of your units: it gets +2 Power this turn.\n\nIt costs 2 energy, once per turn." },
+		Focus = { "AbilityButton", "MyCommander", "Slot_Self_1", "Slot_Self_2", "Slot_Self_3" },
+		Title = "USE YOUR POWER", Text = "Tap Ability, then a unit: +2 Power this turn." },
 	{ Id = "spend", Kind = "mine", Glow = { "Hand", "EndTurnButton" },
-		Text = "Spend the rest of your energy on a card, then End Turn." },
+		Title = "SPEND YOUR ENERGY", Text = "You get 1 more energy every turn. Play a card, then End Turn." },
 	{ Id = "their_turn3", Kind = "theirs",
-		Text = "Selene's turn. Get ready, something big is coming..." },
+		Title = "SELENE'S TURN", Text = "Get ready. Something big is coming..." },
 	{ Id = "celestial", Kind = "mine", Until = "CelestialSummoned", Glow = { "StarGateButton" },
-		Text = "Your Celestial is hiding in the Star Gate! Tap it, then an empty lane.\n\nFlare Stallion has Rush, so it attacks this very turn!" },
+		Focus = { "StarGateButton", "Slot_Self_1", "Slot_Self_2", "Slot_Self_3" },
+		Title = "SUMMON YOUR CELESTIAL", Text = "Tap the Star Gate, then an empty lane. It has Rush: it attacks right away!" },
 	{ Id = "finish", Kind = "final",
-		Text = "Now finish the job! Keep playing cards and ending your turn.\n\nTip: tap Inspect, then any card, to read it up close." },
+		Title = "FINISH HER!", Text = "Keep playing cards and ending your turn. Tap Inspect to read any card." },
 }
 
 local function showStep()
@@ -357,9 +432,11 @@ local function showStep()
 		return
 	end
 	box.Visible = true
+	boxTitle.Text = step.Title or ""
 	boxText.Text = step.Text
 	boxNext.Visible = step.Next == true
 	glow(step.Glow)
+	state.Focus = step.Focus -- the spotlight (below) dims everything else
 end
 
 local function reportStep()
@@ -614,8 +691,10 @@ battleUpdate.OnClientEvent:Connect(function(payload)
 			boxNext.Visible = false
 			boxSkip.Visible = false
 			clearGlows()
-			boxText.Text = payload.Won and "Victory! That's how it's done, cadet. You're ready for a real match."
-				or "Good try! You know the basics now. The bot is waiting whenever you're ready."
+			state.Focus = nil
+			boxTitle.Text = payload.Won and "VICTORY!" or "GOOD TRY!"
+			boxText.Text = payload.Won and "That's how it's done, cadet. You're ready for a real match."
+				or "You know the basics now. The bot is waiting whenever you're ready."
 		end
 	elseif payload.Kind == "Reward" then
 		-- add up the games of this match (a best-of series sends one per game)
@@ -636,6 +715,7 @@ battleUpdate.OnClientEvent:Connect(function(payload)
 		state.TurnEndsAt = nil
 		if state.Tutorial then
 			state.Tutorial = nil
+			state.Focus = nil
 			box.Visible = false
 			boxSkip.Visible = true
 			clearGlows()

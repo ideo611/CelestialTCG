@@ -108,13 +108,29 @@ local function remember(entry)
 	end
 end
 
-local function send(fn)
+-- Sends an event. Right after joining, the player's device class may not be
+-- known yet (their screen reports it within a moment): wait up to 5 seconds
+-- for it so early funnel steps can be split by device too.
+local function send(fn, player)
 	if not sending then
 		return
 	end
-	local ok, err = pcall(fn)
-	if not ok then
-		warn("Analytics: " .. tostring(err))
+	local function go()
+		local ok, err = pcall(fn)
+		if not ok then
+			warn("Analytics: " .. tostring(err))
+		end
+	end
+	if player and player:GetAttribute("DeviceClass") == nil then
+		task.spawn(function()
+			local started = os.clock()
+			while player.Parent and player:GetAttribute("DeviceClass") == nil and os.clock() - started < 5 do
+				task.wait(0.25)
+			end
+			go()
+		end)
+	else
+		go()
 	end
 end
 
@@ -126,7 +142,7 @@ function Analytics.Event(player, name, detail, value)
 	remember({ Kind = "Event", Player = player.UserId, Name = name, Detail = detail })
 	send(function()
 		service:LogCustomEvent(player, name, value or 1, fields(player, detail))
-	end)
+	end, player)
 end
 
 -- A new-player funnel step; sent once per player (also kept as a custom event)
@@ -147,7 +163,7 @@ function Analytics.Onboarding(player, name, detail)
 	remember({ Kind = "Onboarding", Player = player.UserId, Name = name, Step = step, Detail = detail })
 	send(function()
 		service:LogOnboardingFunnelStepEvent(player, step, name, fields(player, detail))
-	end)
+	end, player)
 	Analytics.Event(player, name, detail)
 end
 
@@ -159,7 +175,7 @@ function Analytics.Funnel(player, funnelName, sessionId, step, stepName, detail)
 	remember({ Kind = "Funnel", Player = player.UserId, Name = funnelName .. ":" .. stepName, Step = step, Detail = detail })
 	send(function()
 		service:LogFunnelStepEvent(player, funnelName, sessionId or "", step, stepName, fields(player, detail))
-	end)
+	end, player)
 end
 
 ---------------------------------------------------------------------

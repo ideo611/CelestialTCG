@@ -8,8 +8,8 @@
 	Identical errors are counted instead of repeated. Every few minutes (and
 	when the server shuts down) the batch is saved to the "ErrorLog" data store
 	under e_YYYYMMDD_<server>_<batch #>, with the build version, so you can see
-	which update an error came from. Errors also count as an "error" analytics
-	event (CustomField02 = "Server"/"Client").
+	which update an error came from. Errors from players' screens also count as
+	an "error" analytics event (CustomField02 = "Client").
 
 	In Studio nothing is saved (errors show in Output anyway).
 	Also check Creator Dashboard > Error Report after each update.

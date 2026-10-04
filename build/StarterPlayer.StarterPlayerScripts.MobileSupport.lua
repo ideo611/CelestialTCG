@@ -39,6 +39,11 @@ local adjusted = {}
 while true do
 	local anyOpen = false
 	for _, g in ipairs(playerGui:GetChildren()) do
+		-- the guide (tutorial box over the battle screen) follows the same inset
+		if g.Name == "GuideGui" and not adjusted[g] then
+			adjusted[g] = true
+			g.IgnoreGuiInset = false
+		end
 		if FULL_SCREEN[g.Name] and g:IsA("ScreenGui") then
 			if not adjusted[g] then
 				adjusted[g] = true

@@ -48,6 +48,10 @@ local MAX_TIMEOUTS = 3
 -- Cards are drawn in the order listed (opening hand first). Selene starts low
 -- on HP and can't summon her Celestial; your Celestial is discounted so it
 -- arrives on your 4th turn.
+-- The tutorial's steps (GuideClient shows them; the server logs them in order)
+local TUTORIAL_STEPS = { "intro", "play_unit", "end_turn", "their_turn", "lanes", "their_turn2", "ability", "spend",
+	"their_turn3", "celestial", "finish" }
+
 local TUTORIAL = {
 	Decks = {
 		{ Commander = "CMD-SOL-01", Celestial = "CEL-04", Format = "Open", Cards = {
@@ -610,7 +614,7 @@ local function createTable(index, position, parent, options)
 			local vsBot = match.Seats[1] == BOT or match.Seats[2] == BOT
 			for seat = 1, 2 do
 				local occupant = match.Seats[seat]
-				if isHuman(occupant) then
+				if isHuman(occupant) and (not match.Series or match.Series.Game == 1) then
 					local n = PlayerData.NoteMatchStarted(occupant)
 					local commander = CardDatabase.GetCard(match.Decks[seat].Commander)
 					Analytics.Event(occupant, vsBot and "practice_match_started" or "pvp_match_started",
@@ -914,9 +918,10 @@ local function createTable(index, position, parent, options)
 		-- The tutorial's steps, for the "Tutorial" analytics funnel
 		if action.Kind == "TutorialStep" then
 			local step = toInt(action.Step)
-			if tutorial and step and step >= 1 and step <= 30 and type(action.Name) == "string" then
+			if tutorial and step and TUTORIAL_STEPS[step] and step > (match.TutorialLastStep or 0) then
+				match.TutorialLastStep = step
 				match.TutorialSession = match.TutorialSession or (tostring(player.UserId) .. "-" .. tostring(os.time()))
-				Analytics.Funnel(player, "Tutorial", match.TutorialSession, step, action.Name:sub(1, 40))
+				Analytics.Funnel(player, "Tutorial", match.TutorialSession, step, TUTORIAL_STEPS[step])
 			end
 			return
 		end
@@ -992,6 +997,7 @@ local function createTable(index, position, parent, options)
 		end
 
 		if ok then
+			match.Timeouts[seat] = 0 -- playing at all (not just ending the turn) shows they're there
 			sendMatchUpdate(result)
 			afterAction()
 		else
@@ -1067,14 +1073,20 @@ playRequest.OnServerInvoke = function(player, kind)
 		Analytics.Onboarding(player, "tutorial_started")
 		Analytics.Event(player, "tutorial_started", data and data.Onboarding.TutorialDone and "replay" or "first")
 		local t = newVirtualTable(true)
-		t.StartTutorial(player)
+		local ok, err = pcall(t.StartTutorial, player)
+		if not ok then
+			warn("Tutorial failed to start: " .. tostring(err))
+			t.Close()
+			return false, "Couldn't start the tutorial right now."
+		end
 		return true
 	elseif kind == "Practice" then
 		if not data or next(data.OwnedStarters) == nil and #data.Decks == 0 then
 			return false, "Claim a starter deck first (the starter deck table in the shop)."
 		end
 		local t = newVirtualTable(false)
-		if not t.StartPractice(player) then
+		local ok, started = pcall(t.StartPractice, player)
+		if not ok or not started then
 			t.Close()
 			return false, "Couldn't start a match right now."
 		end
@@ -1084,7 +1096,8 @@ playRequest.OnServerInvoke = function(player, kind)
 end
 
 actionRemote.OnServerEvent:Connect(function(player, action)
-	if not RateLimit.Allow(player, "BattleAction", 25, 5) then
+	local leaving = type(action) == "table" and action.Kind == "Leave"
+	if not leaving and not RateLimit.Allow(player, "BattleAction", 25, 5) then
 		return
 	end
 	local t = tableOf(player)

@@ -15,8 +15,15 @@ local UserInputService = game:GetService("UserInputService")
 local analyticsRemotes = ReplicatedStorage:WaitForChild("AnalyticsRemotes")
 local track = analyticsRemotes:WaitForChild("Track")
 
-task.delay(2, function()
+task.spawn(function()
+	-- report right away (the first analytics events wait for this), once the
+	-- screen size is known
 	local camera = workspace.CurrentCamera
+	local started = os.clock()
+	while (not camera or camera.ViewportSize.X < 10) and os.clock() - started < 2 do
+		task.wait(0.1)
+		camera = workspace.CurrentCamera
+	end
 	local view = camera and camera.ViewportSize or Vector2.new(0, 0)
 	track:FireServer("Device", {
 		Touch = UserInputService.TouchEnabled,

@@ -53,14 +53,16 @@ function Packs.GetPools(packTypeId)
 		Epic = {},
 		LegendaryDeckCard = {},
 		CommanderOrCelestial = {},
-		Mythic = {},
+		Mythic = {}, -- full-art Mythic versions: Commanders and Celestials only
+		All = {},    -- every card in the booster (for the pack fronts)
 	}
 	for _, card in ipairs(CardDatabase.GetAllCards()) do
 		local switchedOff = card.Type == "Anomaly" and CardDatabase.Rules.AnomaliesEnabled == false
 		if card.InPacks ~= false and not switchedOff and belongs(card, packType.Faction) then
-			table.insert(pools.Mythic, card.Id)
+			table.insert(pools.All, card.Id)
 			if card.Type == "Commander" or card.Type == "Celestial" then
 				table.insert(pools.CommanderOrCelestial, card.Id)
+				table.insert(pools.Mythic, card.Id)
 			elseif isDeckCard(card) then
 				if card.Rarity == "Legendary" then
 					table.insert(pools.LegendaryDeckCard, card.Id)
@@ -106,7 +108,7 @@ function Packs.FrontCards(packTypeId)
 	end
 	local pools = Packs.GetPools(key)
 	local withArt, all = {}, {}
-	for _, cardId in ipairs(pools.Mythic) do -- the Mythic pool holds every card in the booster
+	for _, cardId in ipairs(pools.All) do
 		table.insert(all, cardId)
 		if CardArt.ArtFor(cardId) then
 			table.insert(withArt, cardId)
@@ -157,14 +159,16 @@ end
 ---------------------------------------------------------------------
 local ROLL_SCALE = 10000 -- chances are rolled in hundredths of a percent
 
-local POOL_RANK = { Common = 1, Rare = 2, Epic = 3, LegendaryDeckCard = 4, CommanderOrCelestial = 5 }
+local POOL_RANK = { Common = 1, Rare = 2, Epic = 3, LegendaryDeckCard = 4, CommanderOrCelestial = 5, Mythic = 6 }
 local FINISH_RANK = { Base = 1, Holo = 2, Textured = 3, ["3D"] = 4, Mythic = 5 }
 Packs.FinishRank = FINISH_RANK
 
--- Pools that never give a duplicate while the player is missing one of them
-Packs.NoDuplicatePools = { LegendaryDeckCard = true }
+-- Pools that never give a duplicate while the player is missing one of them.
+-- (Mythic: never a Mythic you already have in Mythic.)
+Packs.NoDuplicatePools = { LegendaryDeckCard = true, Mythic = true }
 
--- owns(cardId) -> true if the player already has that card (optional)
+-- owns(cardId, finish) -> true if the player already has that card
+-- (finish = nil: any copy; "Mythic": a Mythic copy). Optional.
 function Packs.Roll(rng, packTypeId, owns)
 	local allPools = Packs.GetPools(packTypeId)
 	local pulls = {}
@@ -176,8 +180,9 @@ function Packs.Roll(rng, packTypeId, owns)
 			if owns and Packs.NoDuplicatePools[chosen.Pool] then
 				-- duplicate protection: only cards they're missing, until they have them all
 				local missing = {}
+				local finishNeeded = chosen.Finish
 				for _, id in ipairs(pool) do
-					if not owns(id) then
+					if not owns(id, finishNeeded) then
 						table.insert(missing, id)
 					end
 				end
@@ -186,8 +191,9 @@ function Packs.Roll(rng, packTypeId, owns)
 				end
 			end
 			local cardId = pool[rng(#pool)]
-			-- 2. finish
-			local finish = slot.Finishes and pickChance(slot.Finishes, rng(ROLL_SCALE), ROLL_SCALE).Finish or "Base"
+			-- 2. finish (some outcomes come in a fixed finish: Mythic)
+			local finish = chosen.Finish
+				or (slot.Finishes and pickChance(slot.Finishes, rng(ROLL_SCALE), ROLL_SCALE).Finish) or "Base"
 			table.insert(pulls, {
 				CardId = cardId,
 				Finish = finish,
@@ -303,13 +309,12 @@ function Packs.GetOddsTable(packTypeId)
 end
 
 -- Chance (0-100) that ONE pack contains at least one card from a pool
--- (or, for "Mythic", at least one Mythic finish)
+-- ("Mythic" = a full-art Mythic Commander or Celestial)
 function Packs.ChancePerPack(poolName)
 	local missAll = 1
 	for _, slot in ipairs(EconomyConfig.PackSlots) do
-		local list = poolName == "Mythic" and (slot.Finishes or {}) or slot.Outcomes
-		for _, entry in ipairs(list) do
-			if entry.Pool == poolName or entry.Finish == poolName then
+		for _, entry in ipairs(slot.Outcomes) do
+			if entry.Pool == poolName then
 				missAll = missAll * (1 - entry.Chance / 100) ^ slot.Count
 			end
 		end

@@ -259,7 +259,7 @@ local function showOddsDetails()
 			for _, f in ipairs(slot.Finishes) do
 				table.insert(parts, ("%s %s"):format(CardVisuals.FinishNames[f.Finish] or f.Finish, f.Shown))
 			end
-			line("  Then the finish: " .. table.concat(parts, "  |  "), true, Color3.fromRGB(150, 220, 255))
+			line("  Then the finish (Mythic pulls are always Mythic): " .. table.concat(parts, "  |  "), true, Color3.fromRGB(150, 220, 255))
 		end
 	end
 	line(oddsTable.PityText, true, GOLD)

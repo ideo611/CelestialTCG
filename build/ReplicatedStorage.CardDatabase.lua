@@ -57,7 +57,7 @@ local CardDatabase = {}
 -- match log can compare games before and after the change. (The log also
 -- fingerprints every card automatically, as a backup.)
 ---------------------------------------------------------------------
-CardDatabase.BalanceVersion = "2026-10-04-balance-20"
+CardDatabase.BalanceVersion = "2026-10-04-balance-21"
 
 ---------------------------------------------------------------------
 -- GAME RULES (draft values from the design doc)
@@ -199,8 +199,24 @@ local function checkEffect(id, effect, anomaly)
 	end
 end
 
+-- Cards that are finished but not in the game yet (waiting for art). They
+-- aren't registered at all: not in packs, decks, the collection or the shop.
+-- Delete an Id from this list once its art is uploaded (CardArt) to release it.
+CardDatabase.Unreleased = {
+	["SOL-026"] = true, ["SOL-027"] = true, -- Dawnbreaker Phoenix, Daybreak
+	["LUN-027"] = true, ["LUN-028"] = true, -- High Tide Oracle, Full Moon Rite
+	["NEB-027"] = true, ["NEB-028"] = true, -- Nursery Matriarch, Cosmic Bloom
+	["VOI-027"] = true, ["VOI-028"] = true, -- Eclipse Wraith, Devour
+	["COM-026"] = true, ["COM-027"] = true, -- Starwake Rider, Meteor Shower
+}
+CardDatabase.HeldBack = {} -- [id] = card, for the ones above
+
 local function addCard(card)
 	assert(type(card.Id) == "string", "Card is missing an Id")
+	if CardDatabase.Unreleased[card.Id] then
+		CardDatabase.HeldBack[card.Id] = card
+		return
+	end
 	assert(Cards[card.Id] == nil, "Duplicate card Id: " .. card.Id)
 	assert(listContains(CardDatabase.Factions, card.Faction), card.Id .. ": bad Faction")
 	assert(listContains(CardDatabase.Types, card.Type), card.Id .. ": bad Type")
@@ -733,8 +749,11 @@ addCard {
 addCard {
 	Id = "LUN-003", Name = "Silver Barrier", Faction = "Lunar", Type = "Spell", Rarity = "Common",
 	EnergyCost = 1, StarCost = 2,
-	AbilityText = "Give one of your units a Shield.",
-	Effect = { Kind = "GiveShield", Target = "FriendlyUnit" },
+	AbilityText = "Give one of your units a Shield. Draw a card.",
+	Effect = { Kind = "Multi", Target = "FriendlyUnit", Effects = {
+		{ Kind = "GiveShield", Target = "FriendlyUnit" },
+		{ Kind = "Draw", Count = 1, Bonus = true },
+	} },
 }
 
 addCard {
@@ -751,8 +770,11 @@ addCard {
 addCard {
 	Id = "LUN-006", Name = "Moonbeam", Faction = "Lunar", Type = "Spell", Rarity = "Common",
 	EnergyCost = 3, StarCost = 1,
-	AbilityText = "Deal 3 damage to a unit.",
-	Effect = { Kind = "DamageUnit", Amount = 3, Target = "AnyUnit" },
+	AbilityText = "Deal 3 damage to a unit. Heal your Commander 2.",
+	Effect = { Kind = "Multi", Target = "AnyUnit", Effects = {
+		{ Kind = "DamageUnit", Amount = 3, Target = "AnyUnit" },
+		{ Kind = "HealCommander", Amount = 2, Bonus = true },
+	} },
 }
 
 addCard {
@@ -1208,7 +1230,7 @@ addCard {
 
 addCard {
 	Id = "COM-003", Name = "Ice Courier", Faction = "Comet", Type = "Unit", Rarity = "Common",
-	EnergyCost = 2, StarCost = 3, Power = 2, HP = 2,
+	EnergyCost = 2, StarCost = 3, Power = 3, HP = 2,
 	Keywords = { Rush = true },
 }
 
@@ -1226,8 +1248,11 @@ addCard {
 addCard {
 	Id = "COM-006", Name = "Recall Beacon", Faction = "Comet", Type = "Spell", Rarity = "Common",
 	EnergyCost = 1, StarCost = 1,
-	AbilityText = "Return one of your units to your hand.",
-	Effect = { Kind = "ReturnToHand", Target = "FriendlyUnit" },
+	AbilityText = "Return one of your units to your hand. Draw a card.",
+	Effect = { Kind = "Multi", Target = "FriendlyUnit", Effects = {
+		{ Kind = "ReturnToHand", Target = "FriendlyUnit" },
+		{ Kind = "Draw", Count = 1, Bonus = true },
+	} },
 }
 
 addCard {
@@ -1283,15 +1308,18 @@ addCard {
 
 addCard {
 	Id = "COM-015", Name = "Starlance Interceptor", Faction = "Comet", Type = "Unit", Rarity = "Rare",
-	EnergyCost = 4, StarCost = 3, Power = 3, HP = 6,
+	EnergyCost = 4, StarCost = 3, Power = 4, HP = 6,
 	Keywords = { Streak = true },
 }
 
 addCard {
 	Id = "COM-016", Name = "Perihelion Dash", Faction = "Comet", Type = "Spell", Rarity = "Rare",
-	EnergyCost = 3, StarCost = 2,
-	AbilityText = "Your units get Streak this turn.",
-	Effect = { Kind = "StreakAllFriendly" },
+	EnergyCost = 2, StarCost = 2,
+	AbilityText = "Your units get Streak this turn. Draw a card.",
+	Effect = { Kind = "Multi", Effects = {
+		{ Kind = "StreakAllFriendly", Bonus = true },
+		{ Kind = "Draw", Count = 1 },
+	} },
 }
 
 addCard {
@@ -1319,14 +1347,14 @@ addCard {
 
 addCard {
 	Id = "COM-020", Name = "Frostwake Tide", Faction = "Comet", Type = "Spell", Rarity = "Epic",
-	EnergyCost = 5, StarCost = 3,
+	EnergyCost = 4, StarCost = 3,
 	AbilityText = "Return all enemy units with 3 or less Power to their owners' hands.",
 	Effect = { Kind = "ReturnAllEnemies", MaxPower = 3 },
 }
 
 addCard {
 	Id = "COM-021", Name = "Tailwind Herald", Faction = "Comet", Type = "Unit", Rarity = "Epic",
-	EnergyCost = 5, StarCost = 3, Power = 3, HP = 5,
+	EnergyCost = 5, StarCost = 3, Power = 4, HP = 5,
 	AbilityText = "When played, your other units get Streak this turn.",
 	OnPlay = { Kind = "StreakAllFriendly", Other = true },
 }
@@ -1718,16 +1746,15 @@ CardDatabase.StarterDecks = {
 			["COM-009"] = 2, -- Glacier Ward
 			["COM-002"] = 2, -- Slipstream
 			["COM-003"] = 2, -- Ice Courier
-			["COM-004"] = 2, -- Tailwind Glider
+			["COM-004"] = 3, -- Tailwind Glider
 			["COM-005"] = 2, -- Rime Hound
 			["COM-007"] = 2, -- Ice Shard
 			["COM-008"] = 2, -- Shard Racer
 			["COM-010"] = 2, -- Frostbite Archer
 			["COM-011"] = 2, -- Deflect
 			["NEU-001"] = 2, -- Star Map
-			["COM-006"] = 2, -- Recall Beacon
 			["COM-001"] = 2, -- Frost Skipper
-			["COM-013"] = 2, -- Hailstorm
+			["COM-013"] = 3, -- Hailstorm
 			-- 1 copy
 			["COM-012"] = 1, -- Kuiper Drifter
 			["COM-014"] = 1, -- Aurora Cavalier

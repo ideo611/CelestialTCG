@@ -106,16 +106,18 @@ EconomyConfig.PackSlots = {
 		{ Finish = "3D", Chance = 2 },
 	} },
 	{ Name = "Star Slot", Count = 1, Outcomes = {
-		{ Pool = "Rare", Chance = 60 },
+		{ Pool = "Rare", Chance = 59 },
 		{ Pool = "Epic", Chance = 30 },
 		{ Pool = "LegendaryDeckCard", Chance = 5 },
 		{ Pool = "CommanderOrCelestial", Chance = 5 },
+		-- Mythic: a full-art Commander or Celestial, always in the Mythic finish,
+		-- never one you already have as a Mythic (until you have them all)
+		{ Pool = "Mythic", Chance = 1, Finish = "Mythic" },
 	}, Finishes = {
 		{ Finish = "Base", Chance = 50 },
 		{ Finish = "Holo", Chance = 30 },
 		{ Finish = "Textured", Chance = 13 },
-		{ Finish = "3D", Chance = 6.5 },
-		{ Finish = "Mythic", Chance = 0.5 },
+		{ Finish = "3D", Chance = 7 },
 	} },
 }
 
@@ -125,6 +127,7 @@ EconomyConfig.PoolNames = {
 	Epic = "Epic",
 	LegendaryDeckCard = "Legendary",
 	CommanderOrCelestial = "Commander or Celestial",
+	Mythic = "Mythic (full-art Commander or Celestial)",
 }
 
 ---------------------------------------------------------------------

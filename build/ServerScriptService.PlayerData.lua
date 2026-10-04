@@ -25,7 +25,7 @@ local LOAD_RETRIES = 3
 local DATA_VERSION = 1
 -- Bump when starter deck lists change: players who own a starter get any
 -- cards the new list has that they're missing.
-local STARTER_VERSION = 4 -- 3: Nebula starter gets Petal Ward; 4: star-rating pass
+local STARTER_VERSION = 5 -- 3: Nebula starter gets Petal Ward; 4: star-rating pass; 5: Comet starter fix
 
 local PlayerData = {}
 PlayerData.Changed = nil -- set by PlayerDataServer: function(player) called after any change
@@ -515,7 +515,11 @@ function PlayerData.OpenPack(player, currency, packTypeId)
 		return false, "Pick how to pay."
 	end
 
-	local pulls = Packs.Roll(rng, packTypeId, function(cardId)
+	local pulls = Packs.Roll(rng, packTypeId, function(cardId, finish)
+		if finish then
+			local entry = data.Collection[cardId]
+			return entry ~= nil and (entry[finish] or 0) > 0
+		end
 		return PlayerData.CountOwned(data, cardId) > 0
 	end)
 	for _, pull in ipairs(pulls) do

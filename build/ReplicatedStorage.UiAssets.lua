@@ -138,8 +138,8 @@ UiAssets.Vfx = {
 	CometImpact = id(0),
 }
 
--- Effects that rise out of the ground: on a card they play under the card,
--- lined up with its bottom edge. The number is how far down the effect's
+-- Effects that rise out of the ground: on a card they start from the card's
+-- bottom edge (drawn over the card) instead of its middle. The number is how far down the effect's
 -- image its ground ring sits (0 = top, 1 = bottom).
 UiAssets.GroundedVfx = {
 	CardLanding = 0.68,

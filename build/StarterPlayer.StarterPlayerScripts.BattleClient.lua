@@ -1560,6 +1560,16 @@ do
 end
 
 local uidSlot = {} -- [unit Uid] = the lane slot showing it
+local uidCard = {} -- [unit Uid] = its card id (for faction-colored hits)
+-- [unit Uid] = faction of whoever is hitting it in the current attack
+-- (or ALREADY_HIT when a projectile has already shown its impact there)
+local hitBy = {}
+local ALREADY_HIT = "AlreadyHit"
+local function factionOfUid(uid)
+	local card = uid and uidCard[uid] and CardDatabase.GetCard(uidCard[uid])
+	return card and card.Faction or nil
+end
+
 
 function render()
 	if not current or animating then
@@ -1568,6 +1578,7 @@ function render()
 	for uid in pairs(uidSlot) do
 		uidSlot[uid] = nil
 	end
+	table.clear(uidCard)
 	-- Undo anything an animation left moved, shrunk or tilted
 	for slot, base in pairs(slotBase) do
 		slot.Position = UDim2.fromScale(base.X, base.Y)
@@ -1630,6 +1641,7 @@ function render()
 			local unit = owner.Lanes[lane]
 			if unit then
 				uidSlot[unit.Uid] = slot
+				uidCard[unit.Uid] = unit.CardId
 				drawCard(slot, unit.CardId, unit, false, false, finishFor(side, unit.CardId))
 			else
 				-- An empty lane: a see-through card outline in the mat's color
@@ -2169,6 +2181,8 @@ function playEvent.UnitPlayed(e)
 	local fromY = side == "Self" and 0.87 or -0.15
 	flyIn(e.CardId, 0.38, fromY, slot, finishFor(side, e.CardId))
 	uidSlot[e.Uid] = slot
+	uidCard[e.Uid] = e.CardId
+	playEvent._fx(slot, "CardLanding", 1.5, { Duration = 0.6 })
 	local played = CardDatabase.GetCard(e.CardId)
 	if not (played and played.Keywords and played.Keywords.Rush) then
 		playSound("Sleep") -- it can't attack yet (the Zzz)
@@ -2232,11 +2246,13 @@ function playEvent.CelestialSummoned(e)
 	playEvent._fx(slot, "SummonPillar", 1.9, { Duration = 0.9 })
 	flyIn(e.CardId, g.X, g.Y, slot, finishFor(side, e.CardId))
 	uidSlot[e.Uid] = slot
+	uidCard[e.Uid] = e.CardId
 	flash(slot, GOLD, 0.6)
 	pause(0.25)
 end
 
 function playEvent.SpellCast(e)
+	table.clear(hitBy)
 	playSound("SpellCast")
 	-- the casting circle behind the big spell card
 	playEvent._fx(nil, "SpellCast", 1, { Position = UDim2.fromScale(0.5, 0.36), Duration = 0.9, ZIndex = 15 })
@@ -2253,6 +2269,9 @@ end
 
 function playEvent.Attack(e)
 	local attacker, defender = uidSlot[e.Attacker], uidSlot[e.Defender]
+	table.clear(hitBy)
+	hitBy[e.Defender] = factionOfUid(e.Attacker)
+	hitBy[e.Attacker] = factionOfUid(e.Defender) -- (the hit back)
 	if attacker and defender then
 		playSound("AttackSwing")
 		lunge(attacker, slotBase[defender].Y, 0.55)
@@ -2271,7 +2290,7 @@ function playEvent._fx(slot, key, size, options)
 	if not base and options.Size then
 		h = options.Size -- (a screen-position effect: Size is its height as a share of the screen)
 	end
-	UiAssets.PlayFlipbook(fxLayer, UiAssets.Vfx[key], {
+	UiAssets.PlayFlipbook(fxLayer, UiAssets.VfxImage(key), {
 		Position = options.Position or UDim2.fromScale(base.X, base.Y),
 		Size = UDim2.fromScale(h, h),
 		Duration = seconds(options.Duration or 0.55),
@@ -2280,9 +2299,94 @@ function playEvent._fx(slot, key, size, options)
 	})
 end
 
--- The impact burst on a hit (bigger hits make a bigger burst)
-function playEvent._impact(slot, amount, color)
-	playEvent._fx(slot, "ImpactBurst", math.clamp(1 + (amount or 1) * 0.08, 1.05, 1.6), { Color = color })
+-- The impact on a hit: the attacker's faction impact if it has one,
+-- otherwise a quick flash for small hits and a burst for big ones.
+-- (Bigger hits make a bigger effect.)
+function playEvent._impact(slot, amount, color, faction)
+	if faction == ALREADY_HIT then
+		return
+	end
+	local size = math.clamp(1 + (amount or 1) * 0.08, 1.05, 1.6)
+	local factionKey = faction and UiAssets.FactionImpact[faction]
+	if factionKey and UiAssets.VfxImage(factionKey) then
+		playEvent._fx(slot, factionKey, size * 1.1, { Color = color })
+	elseif (amount or 1) <= 2 then
+		playEvent._fx(slot, "HitFlash", size, { Color = color, Duration = 0.4 })
+	else
+		playEvent._fx(slot, "DamageBurst", size * 1.1, { Color = color, Duration = 0.6 })
+	end
+end
+
+-- A projectile flying from one card slot to another: a looping head with a
+-- glowing trail stretched behind it, then an impact where it lands.
+-- Waits until it lands. kind = an entry of UiAssets.Projectiles.
+function playEvent._projectile(fromSlot, toSlot, kind)
+	local from, to = slotBase[fromSlot], slotBase[toSlot]
+	local spec = UiAssets.Projectiles[kind]
+	local headImage = spec and UiAssets.VfxImage(spec.Head)
+	if animSpeed <= 0 or not from or not to or not headImage then
+		return false
+	end
+	local area = fxLayer.AbsoluteSize
+	local fx, fy = from.X * area.X, from.Y * area.Y
+	local tx, ty = to.X * area.X, to.Y * area.Y
+	local headSize = to.H * area.Y * 0.55
+	local flight = seconds(spec.Flight or 0.3)
+	local head = UiAssets.PlayFlipbook(fxLayer, headImage, {
+		Position = UDim2.fromOffset(fx, fy),
+		Size = UDim2.fromOffset(headSize, headSize),
+		Duration = flight,
+		ZIndex = 19,
+	})
+	local trail
+	local trailImage = UiAssets.VfxImage(spec.Trail)
+	if trailImage then
+		trail = Instance.new("ImageLabel")
+		trail.Name = "Trail"
+		trail.BackgroundTransparency = 1
+		trail.Image = trailImage
+		trail.ScaleType = Enum.ScaleType.Stretch
+		trail.AnchorPoint = Vector2.new(0.5, 0.5)
+		trail.ZIndex = 18
+		trail.Parent = fxLayer
+	end
+	local dx, dy = tx - fx, ty - fy
+	-- the trail image points up; turn it to point the way the head flies
+	local angle = math.deg(math.atan2(dx, -dy))
+	local width = headSize * 0.5
+	local start = os.clock()
+	while true do
+		local t = math.min((os.clock() - start) / flight, 1)
+		local eased = t ^ 1.25 -- picks up a little speed as it flies
+		local hx, hy = fx + dx * eased, fy + dy * eased
+		if head then
+			head.Position = UDim2.fromOffset(hx, hy)
+		end
+		if trail then
+			-- the tail lags behind the head, so the trail stretches as it flies
+			local tailT = math.max(0, eased - 0.55)
+			local sx, sy = fx + dx * tailT, fy + dy * tailT
+			local length = math.max(math.sqrt((hx - sx) ^ 2 + (hy - sy) ^ 2) + width * 0.6, 1)
+			trail.Position = UDim2.fromOffset((hx + sx) / 2, (hy + sy) / 2)
+			trail.Size = UDim2.fromOffset(width, length)
+			trail.Rotation = angle
+		end
+		if t >= 1 then
+			break
+		end
+		task.wait()
+	end
+	if head then
+		head:Destroy()
+	end
+	if trail then
+		TweenService:Create(trail, TweenInfo.new(seconds(0.15)), { ImageTransparency = 1 }):Play()
+		task.delay(seconds(0.16), function()
+			trail:Destroy()
+		end)
+	end
+	playEvent._fx(toSlot, spec.Impact, 1.4, { Duration = 0.55 })
+	return true
 end
 
 function playEvent.UnitDamaged(e)
@@ -2291,7 +2395,8 @@ function playEvent.UnitDamaged(e)
 		-- bigger hits sound deeper
 		playSound("Hit", math.clamp(1.15 - (e.Amount or 1) * 0.06, 0.75, 1.15))
 		flash(slot, RED, 0.6)
-		playEvent._impact(slot, e.Amount)
+		playEvent._impact(slot, e.Amount, nil, hitBy[e.Uid])
+		hitBy[e.Uid] = nil
 		shake(slot)
 		popText(slot, "-" .. e.Amount, RED, true)
 		setShownStats(slot, nil, e.HP, true)
@@ -2299,12 +2404,19 @@ function playEvent.UnitDamaged(e)
 	pause(0.12)
 end
 
+-- Ignite: the new unit throws a fireball at the unit across from it
 function playEvent.Ignite(e)
 	local slot = uidSlot[e.Target]
+	local from = uidSlot[e.Uid]
 	if slot then
 		playSound("Ignite")
+		table.clear(hitBy)
+		if from and playEvent._projectile(from, slot, "Fireball") then
+			hitBy[e.Target] = ALREADY_HIT -- (the damage that follows doesn't need another burst)
+		else
+			playEvent._fx(slot, "Ignite", 1.3)
+		end
 		flash(slot, ORANGE, 0.7)
-		playEvent._fx(slot, "Ignite", 1.3)
 	end
 	pause(0.1)
 end
@@ -2336,7 +2448,7 @@ function playEvent.UnitHealed(e)
 	if slot then
 		playSound("Heal")
 		flash(slot, GREEN, 0.4)
-		playEvent._fx(slot, "Heal", 1.2, { Duration = 0.7 })
+		playEvent._fx(slot, "HealPulse", 1.3, { Duration = 0.7 })
 		popText(slot, "+" .. e.Amount, GREEN, true)
 		setShownStats(slot, nil, e.HP, nil)
 	end
@@ -2457,7 +2569,7 @@ end
 function playEvent.UnitDestroyed(e)
 	local slot = uidSlot[e.Uid]
 	if slot then
-		playEvent._fx(slot, "Destroyed", 1.4, { Duration = 0.6 })
+		playEvent._fx(slot, "DestroyBurst", 1.5, { Duration = 0.65 })
 		removeFromSlot(slot, RED)
 		uidSlot[e.Uid] = nil
 	end
@@ -2487,7 +2599,11 @@ function playEvent.CommanderDamaged(e)
 		playSound("Streak")
 		playEvent._fx(target, "Streak", 1.5)
 	end
-	playEvent._impact(target, e.Amount)
+	if UiAssets.VfxImage("CommanderHit") then
+		playEvent._fx(target, "CommanderHit", math.clamp(1.3 + (e.Amount or 1) * 0.06, 1.35, 1.8), { Duration = 0.65 })
+	else
+		playEvent._impact(target, e.Amount)
+	end
 	shake(target)
 	popText(target, "-" .. e.Amount, RED, true)
 	setShownCommanderHP(side, e.HP, true)
@@ -2511,7 +2627,7 @@ function playEvent.CommanderHealed(e)
 	local target = commanderSlots[side]
 	playSound("Heal")
 	flash(target, GREEN, 0.5)
-	playEvent._fx(target, "Heal", 1.2, { Duration = 0.7 })
+	playEvent._fx(target, "HealPulse", 1.3, { Duration = 0.7 })
 	popText(target, "+" .. e.Amount, GREEN, true)
 	setShownCommanderHP(side, e.HP, false)
 	pause(0.2)

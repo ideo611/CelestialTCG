@@ -551,6 +551,10 @@ instanceMeta.__index = function(self, key)
 	-- children by name
 	local child = self:FindFirstChild(key)
 	if child then return child end
+	-- on-screen size/position of GUI objects (a fixed 1600x900 screen in tests)
+	if (key == "AbsoluteSize" or key == "AbsolutePosition") and cls.Size then
+		return key == "AbsoluteSize" and Vector2.new(1600, 900) or Vector2.new(0, 0)
+	end
 	error(tostring(key) .. " is not a valid member of " .. rawget(self, "__class") .. " \"" .. tostring(props.Name) .. "\"", 2)
 end
 

@@ -117,6 +117,60 @@ UiAssets.Vfx = {
 	LegendaryPull = id(137582311055047), -- vfx-legendary-pull
 	MythicPull = id(123244432953386),   -- vfx-mythic-pull
 	CardReveal = id(136369018275222),   -- vfx-card-reveal
+
+	-- New effect pack (0 = not uploaded yet: the older effect plays instead)
+	HitFlash = id(0),        -- VFX_HitFlash: small hits (1-2 damage)
+	DamageBurst = id(0),     -- VFX_DamageBurst: big hits (3+ damage)
+	CommanderHit = id(0),    -- VFX_CommanderHit: damage to a Commander
+	CardLanding = id(0),     -- VFX_CardLanding: a unit landing in its lane
+	DestroyBurst = id(0),    -- VFX_DestroyBurst: a unit destroyed
+	HealPulse = id(0),       -- VFX_HealPulse: heals
+	Fireball = id(0),        -- vfx-solar-fireball: Ignite projectile head (loop)
+	FireTrail = id(0),       -- vfx-solar-trail: Ignite projectile trail (single image, not a sheet)
+	IgniteImpact = id(0),    -- VFX_Solar_IgniteImpact: where the fireball lands
+	SolarImpact = id(0),     -- vfx-solar-impact: hits from Solar units
+	LunarImpact = id(0),
+	NebulaImpact = id(0),
+	VoidImpact = id(0),
+	CometImpact = id(0),
+}
+
+-- If an effect isn't uploaded, play this one instead
+local VFX_FALLBACK = {
+	HitFlash = "ImpactBurst",
+	DamageBurst = "ImpactBurst",
+	CommanderHit = "ImpactBurst",
+	DestroyBurst = "Destroyed",
+	HealPulse = "Heal",
+	IgniteImpact = "Ignite",
+}
+
+-- The image for an effect (following the fallbacks), or nil
+function UiAssets.VfxImage(key)
+	local seen = 0
+	while key and seen < 4 do
+		if UiAssets.Vfx[key] then
+			return UiAssets.Vfx[key]
+		end
+		key = VFX_FALLBACK[key]
+		seen = seen + 1
+	end
+	return nil
+end
+
+-- Each faction's hit effect (used when a unit of that faction lands a blow)
+UiAssets.FactionImpact = {
+	Solar = "SolarImpact",
+	Lunar = "LunarImpact",
+	Nebula = "NebulaImpact",
+	Void = "VoidImpact",
+	Comet = "CometImpact",
+}
+
+-- Projectiles: a looping head sheet, a trail image stretched behind it, the
+-- impact sheet where it lands, and the flight time in seconds
+UiAssets.Projectiles = {
+	Fireball = { Head = "Fireball", Trail = "FireTrail", Impact = "IgniteImpact", Flight = 0.32 },
 }
 
 --[[ Plays a sprite sheet once on screen, then removes it.

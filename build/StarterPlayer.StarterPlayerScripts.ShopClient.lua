@@ -22,6 +22,7 @@ local EconomyConfig = require(ReplicatedStorage:WaitForChild("EconomyConfig"))
 local Playmats = require(ReplicatedStorage:WaitForChild("Playmats"))
 local PackVisuals = require(ReplicatedStorage:WaitForChild("PackVisuals"))
 local UiAssets = require(ReplicatedStorage:WaitForChild("UiAssets"))
+local UiTheme = require(ReplicatedStorage:WaitForChild("UiTheme"))
 local SoundAssets = require(ReplicatedStorage:WaitForChild("SoundAssets"))
 -- Shiny cards the server drew in the shop (singles case, displays) move on this screen
 task.spawn(function()
@@ -96,17 +97,19 @@ local function button(parent, name, text, position, size, color)
 		PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6),
 		PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4),
 	}, b)
-	return b
+	return UiTheme.Button(b)
 end
 
 local function clear(parent)
 	for _, child in ipairs(parent:GetChildren()) do
-		child:Destroy()
+		if not child:GetAttribute("ThemePart") then -- (keeps the menu's border and plate)
+			child:Destroy()
+		end
 	end
 end
 
 local function scroller(parent, name, position, size)
-	return make("ScrollingFrame", {
+	return UiTheme.List(make("ScrollingFrame", {
 		Name = name,
 		Position = position,
 		Size = size,
@@ -115,7 +118,7 @@ local function scroller(parent, name, position, size)
 		ScrollBarThickness = 8,
 		CanvasSize = UDim2.new(0, 0, 0, 0),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-	}, parent)
+	}, parent))
 end
 
 local function ask(kind, args)
@@ -155,6 +158,7 @@ local gui = make("ScreenGui", {
 }, player:WaitForChild("PlayerGui"))
 
 local root = make("Frame", { Name = "Root", Size = UDim2.fromScale(1, 1), BackgroundColor3 = BG, BorderSizePixel = 0 }, gui)
+UiTheme.Backdrop(root)
 local TABS = { { "Packs", "Packs" }, { "Singles", "Singles" }, { "Starters", "Starter Decks" },
 	{ "Tokens", "Star Tokens" }, { "BreakDown", "Break Down" }, { "Playmats", "Playmats" } }
 local tabButtons = {}
@@ -215,9 +219,9 @@ local oddsPopup = make("Frame", {
 	Visible = false,
 	ZIndex = 5,
 }, gui)
-UiAssets.FramePanel(oddsPopup)
 make("UICorner", { CornerRadius = UDim.new(0, 10) }, oddsPopup)
-label(oddsPopup, "OddsTitle", UDim2.new(0, 16, 0, 10), UDim2.new(1, -32, 0, 34), "Card-by-card odds", 24, { ZIndex = 5 })
+UiTheme.Panel(oddsPopup)
+UiTheme.Title(label(oddsPopup, "OddsTitle", UDim2.new(0, 16, 0, 10), UDim2.new(1, -32, 0, 34), "Card-by-card odds", 24, { ZIndex = 5 }))
 local oddsList = scroller(oddsPopup, "OddsList", UDim2.new(0, 16, 0, 50), UDim2.new(1, -32, 1, -110))
 oddsList.ZIndex = 5
 local oddsClose = button(oddsPopup, "CloseOdds", "Close", UDim2.new(0.5, -60, 1, -50), UDim2.fromOffset(120, 38), GREY)
@@ -278,8 +282,9 @@ local reveal = make("Frame", {
 	Visible = false,
 	ZIndex = 6,
 }, gui)
-local revealTitle = label(reveal, "RevealTitle", UDim2.fromScale(0.1, 0.06), UDim2.fromScale(0.8, 0.08),
-	"Click each card to flip it", 30, { ZIndex = 6 })
+UiTheme.Backdrop(reveal, { Seed = 11 })
+local revealTitle = UiTheme.Title(label(reveal, "RevealTitle", UDim2.fromScale(0.1, 0.06), UDim2.fromScale(0.8, 0.08),
+	"Click each card to flip it", 30, { ZIndex = 6 }))
 local revealRow = make("Frame", {
 	Name = "RevealRow",
 	Position = UDim2.fromScale(0.04, 0.2),
@@ -295,59 +300,113 @@ revealDone.ZIndex = 6
 local BIG_POOLS = { LegendaryDeckCard = "LEGENDARY!", CommanderOrCelestial = "LEGENDARY!", Mythic = "MYTHIC!!" }
 local revealState = nil
 
+-- How long a pull's card back glows before it turns (big pulls only)
+local function teaseFor(pull)
+	if pull.Finish == "Mythic" then
+		return CardVisuals.MythicColor, 1.2
+	elseif pull.Pool == "LegendaryDeckCard" or pull.Pool == "CommanderOrCelestial" then
+		return CardVisuals.RarityColors.Legendary, 0.85
+	elseif pull.Pool == "Epic" then
+		return CardVisuals.RarityColors.Epic, 0.35
+	end
+	return nil, 0
+end
+
+local function raiseText(cardButton)
+	for _, child in ipairs(cardButton:GetDescendants()) do
+		if child:IsA("TextLabel") then
+			child.ZIndex = math.max(child.ZIndex, 7)
+		end
+	end
+end
+
 local function flip(index)
 	local entry = revealState and revealState.Slots[index]
 	if not entry or entry.Flipped then
 		return
 	end
 	entry.Flipped = true
-	revealState.Remaining = revealState.Remaining - 1
-	local pull = entry.Pull
-	local cardButton = entry.Button
-	clear(cardButton)
-	CardVisuals.Draw(cardButton, pull.CardId, { Finish = pull.Finish })
-	for _, child in ipairs(cardButton:GetDescendants()) do
-		if child:IsA("TextLabel") then
-			child.ZIndex = 7
-		end
-	end
-	local card = CardDatabase.GetCard(pull.CardId)
-	-- flip effect: a quick flash for every card, a big burst for Legendary and Mythic
-	local burst = pull.Finish == "Mythic" and "MythicPull"
-		or ((pull.Pool == "LegendaryDeckCard" or pull.Pool == "CommanderOrCelestial") and "LegendaryPull")
-		or "CardReveal"
-	SoundAssets.Play("CardFlip", 0.95 + math.random() * 0.1)
-	if burst == "MythicPull" then
-		SoundAssets.Play("RevealMythic")
-	elseif burst == "LegendaryPull" then
-		SoundAssets.Play("RevealLegendary")
-	elseif pull.Pool == "Epic" then
-		SoundAssets.Play("RevealEpic")
-	elseif pull.Pool == "Rare" or pull.Finish ~= "Base" then
-		SoundAssets.Play("RevealRare", nil, pull.Pool == "Rare" and 1 or 0.7)
-	end
-	UiAssets.PlayFlipbook(cardButton.Parent, UiAssets.Vfx[burst], {
-		Position = UDim2.fromScale(0.5, 0.45),
-		Size = UDim2.fromScale(burst == "CardReveal" and 1.3 or 2.4, burst == "CardReveal" and 1.3 or 2.4),
-		Duration = burst == "CardReveal" and 0.45 or (burst == "MythicPull" and 1.1 or 0.9),
-		ZIndex = 9,
-	})
-	local big = pull.Finish == "Mythic" and "MYTHIC!!" or BIG_POOLS[pull.Pool]
-	local captionText = CardVisuals.FinishNames[pull.Finish] .. (pull.New and "  NEW!" or "")
-	if big then
-		captionText = big .. "  " .. captionText
-		local stroke = cardButton:FindFirstChild("RarityStroke")
-		if stroke then
-			stroke.Thickness = 5
-		end
-	end
-	entry.Caption.Text = captionText
-	entry.Caption.TextColor3 = pull.Finish == "Mythic" and CardVisuals.MythicColor
-		or (CardVisuals.RarityColors[card.Rarity] or WHITE)
-	if revealState.Remaining == 0 then
-		revealTitle.Text = "Added to your collection!"
+	local state = revealState
+	state.Remaining = state.Remaining - 1
+	if state.Remaining == 0 then
 		revealAll.Visible = false
 	end
+	local pull = entry.Pull
+	local cardButton = entry.Button
+	local card = CardDatabase.GetCard(pull.CardId)
+	local tease, teaseTime = teaseFor(pull)
+	if tease then
+		SoundAssets.Play("CardFlip", 0.7)
+	end
+
+	-- after the card has turned: sound, burst and the caption
+	local function shown()
+		local burst = pull.Finish == "Mythic" and "MythicPull"
+			or ((pull.Pool == "LegendaryDeckCard" or pull.Pool == "CommanderOrCelestial") and "LegendaryPull")
+			or "CardReveal"
+		SoundAssets.Play("CardFlip", 0.95 + math.random() * 0.1)
+		if burst == "MythicPull" then
+			SoundAssets.Play("RevealMythic")
+		elseif burst == "LegendaryPull" then
+			SoundAssets.Play("RevealLegendary")
+		elseif pull.Pool == "Epic" then
+			SoundAssets.Play("RevealEpic")
+		elseif pull.Pool == "Rare" or pull.Finish ~= "Base" then
+			SoundAssets.Play("RevealRare", nil, pull.Pool == "Rare" and 1 or 0.7)
+		end
+		UiAssets.PlayFlipbook(cardButton.Parent, UiAssets.Vfx[burst], {
+			Position = UDim2.fromScale(0.5, 0.45),
+			Size = UDim2.fromScale(burst == "CardReveal" and 1.3 or 2.4, burst == "CardReveal" and 1.3 or 2.4),
+			Duration = burst == "CardReveal" and 0.45 or (burst == "MythicPull" and 1.1 or 0.9),
+			ZIndex = 9,
+		})
+		local big = pull.Finish == "Mythic" and "MYTHIC!!" or BIG_POOLS[pull.Pool]
+		local captionText = CardVisuals.FinishNames[pull.Finish] .. (pull.New and "  NEW!" or "")
+		if big then
+			captionText = big .. "  " .. captionText
+			local stroke = cardButton:FindFirstChild("RarityStroke", true)
+			if stroke then
+				stroke.Thickness = 5
+			end
+		end
+		entry.Caption.Text = captionText
+		entry.Caption.TextColor3 = pull.Finish == "Mythic" and CardVisuals.MythicColor
+			or (CardVisuals.RarityColors[card.Rarity] or WHITE)
+	end
+
+	CardVisuals.Flip(cardButton, function(target)
+		CardVisuals.Draw(target, pull.CardId, { Finish = pull.Finish })
+		raiseText(target)
+	end, {
+		Duration = tease and 0.5 or 0.4,
+		Tease = tease,
+		TeaseTime = teaseTime,
+		OnShown = shown,
+	})
+	state.Shown = (state.Shown or 0) + 1
+	if revealState == state and state.Shown == #state.Slots then
+		revealTitle.Text = "Added to your collection!"
+	end
+end
+
+-- Flip every card still face down, one after another
+local function flipRest()
+	if not revealState then
+		return
+	end
+	revealAll.Visible = false
+	local state = revealState
+	task.spawn(function()
+		for i = 1, #state.Slots do
+			if revealState ~= state then
+				return
+			end
+			if not state.Slots[i].Flipped then
+				task.spawn(flip, i)
+				task.wait(0.14)
+			end
+		end
+	end)
 end
 
 local function startReveal(pulls, packName)
@@ -373,32 +432,20 @@ local function startReveal(pulls, packName)
 			ZIndex = 6,
 		}, holder)
 		CardVisuals.DrawFaceDown(cardButton, i == #pulls and "Star Slot" or "?")
-		for _, child in ipairs(cardButton:GetDescendants()) do
-			if child:IsA("TextLabel") then
-				child.ZIndex = 7
-			end
-		end
+		raiseText(cardButton)
 		local caption = label(holder, "Caption", UDim2.new(0, 0, 1, -30), UDim2.new(1, 0, 0, 28), "", 18, { ZIndex = 6 })
 		revealState.Slots[i] = { Pull = pull, Button = cardButton, Caption = caption, Flipped = false }
 		cardButton.Activated:Connect(function()
-			flip(i)
+			task.spawn(flip, i)
 		end)
 	end
 	reveal.Visible = true
 end
 
-revealAll.Activated:Connect(function()
-	if revealState then
-		for i = 1, #revealState.Slots do
-			flip(i)
-		end
-	end
-end)
+revealAll.Activated:Connect(flipRest)
 revealDone.Activated:Connect(function()
 	if revealState and revealState.Remaining > 0 then
-		for i = 1, #revealState.Slots do
-			flip(i)
-		end
+		flipRest()
 		return
 	end
 	reveal.Visible = false
@@ -421,8 +468,9 @@ local picker = make("Frame", {
 	Visible = false,
 	ZIndex = 6,
 }, gui)
-local pickerTitle = label(picker, "PickerTitle", UDim2.fromScale(0.1, 0.05), UDim2.fromScale(0.8, 0.08),
-	"Pick your pack", 34, { ZIndex = 6 })
+UiTheme.Backdrop(picker, { Seed = 5 })
+local pickerTitle = UiTheme.Title(label(picker, "PickerTitle", UDim2.fromScale(0.1, 0.05), UDim2.fromScale(0.8, 0.08),
+	"Pick your pack", 34, { ZIndex = 6 }))
 label(picker, "PickerNote", UDim2.fromScale(0.15, 0.13), UDim2.fromScale(0.7, 0.05),
 	"Every pack has the same odds. Go with the one that feels lucky.", 18,
 	{ ZIndex = 6, Font = Enum.Font.Gotham, TextColor3 = Color3.fromRGB(200, 190, 230) })
@@ -535,8 +583,8 @@ local function renderPacks()
 		Size = UDim2.new(0.3, 0, 1, 0),
 		BackgroundColor3 = PANEL,
 	}, content)
-	UiAssets.FramePanel(panel)
 	make("UICorner", { CornerRadius = UDim.new(0, 12) }, panel)
+	UiTheme.Panel(panel)
 	local preview = make("Frame", {
 		Name = "PackPreview",
 		Position = UDim2.fromScale(0.15, 0.03),
@@ -588,10 +636,10 @@ local function renderPacks()
 		Size = UDim2.new(0.47, 0, 1, 0),
 		BackgroundColor3 = PANEL,
 	}, content)
-	UiAssets.FramePanel(oddsFrame)
 	make("UICorner", { CornerRadius = UDim.new(0, 12) }, oddsFrame)
-	label(oddsFrame, "OddsHeader", UDim2.new(0, 16, 0, 10), UDim2.new(1, -32, 0, 34), info.Name .. " odds", 26,
-		{ TextXAlignment = Enum.TextXAlignment.Left })
+	UiTheme.Panel(oddsFrame)
+	UiTheme.Title(label(oddsFrame, "OddsHeader", UDim2.new(0, 16, 0, 10), UDim2.new(1, -32, 0, 34), info.Name .. " odds", 26,
+		{ TextXAlignment = Enum.TextXAlignment.Left }))
 	local lines = {}
 	if oddsTable then
 		for _, slot in ipairs(oddsTable.Slots) do
@@ -641,6 +689,7 @@ local function renderStarters()
 			BackgroundColor3 = CardVisuals.FactionColors[name] or ACCENT,
 		}, grid)
 		make("UICorner", { CornerRadius = UDim.new(0, 10) }, box)
+		UiTheme.Panel(box, { Color = UiTheme.Tinted(CardVisuals.FactionColors[name] or ACCENT, 0.55) })
 		label(box, "StarterName", UDim2.fromScale(0.05, 0.04), UDim2.fromScale(0.9, 0.16), name .. " Starter Deck", 26)
 		label(box, "StarterInfo", UDim2.fromScale(0.07, 0.22), UDim2.fromScale(0.86, 0.48),
 			("%s\n\nCommander: %s\nCelestial: %s\n30 ready-to-play cards\nIncludes the %s playmat"):format(starter.Description,
@@ -721,6 +770,7 @@ local function renderSingles()
 			BackgroundColor3 = PANEL,
 		}, grid)
 		make("UICorner", { CornerRadius = UDim.new(0, 8) }, cell)
+		UiTheme.Panel(cell, { Thickness = 12 })
 		local cardHolder = make("Frame", {
 			Name = "Card",
 			Position = UDim2.fromScale(0.1, 0.02),
@@ -843,6 +893,7 @@ local function renderPlaymats()
 		local equipped = summary.EquippedMat == mat.Id
 		local box = make("Frame", { Name = "Mat_" .. mat.Id, LayoutOrder = mat.Order, BackgroundColor3 = PANEL }, grid)
 		make("UICorner", { CornerRadius = UDim.new(0, 10) }, box)
+		UiTheme.Panel(box, { Thickness = 12 })
 		if equipped then
 			make("UIStroke", { Color = GOLD, Thickness = 3 }, box)
 		end
@@ -949,6 +1000,7 @@ local toast = label(toastGui, "Announcement", UDim2.new(0.2, 0, 0, 70), UDim2.ne
 	BackgroundColor3 = Color3.fromRGB(20, 10, 40),
 	Visible = false,
 })
+UiTheme.List(toast, { Color = false })
 make("UICorner", { CornerRadius = UDim.new(0, 10) }, toast)
 local toastCount = 0
 
@@ -976,8 +1028,9 @@ local welcome = make("Frame", {
 	Visible = false,
 	ZIndex = 8,
 }, toastGui)
-label(welcome, "WelcomeTitle", UDim2.fromScale(0.1, 0.08), UDim2.fromScale(0.8, 0.1), "Welcome, Commander!", 40,
-	{ ZIndex = 8 })
+UiTheme.Backdrop(welcome, { Seed = 3 })
+UiTheme.Title(label(welcome, "WelcomeTitle", UDim2.fromScale(0.1, 0.08), UDim2.fromScale(0.8, 0.1), "Welcome, Commander!", 40,
+	{ ZIndex = 8 }))
 label(welcome, "WelcomeText", UDim2.fromScale(0.15, 0.18), UDim2.fromScale(0.7, 0.08),
 	"Pick your first starter deck. It's free! You can get the others later at the Card Shop.", 22,
 	{ ZIndex = 8, Font = Enum.Font.Gotham })
@@ -1005,6 +1058,7 @@ local function showWelcome()
 			ZIndex = 8,
 		}, welcomeRow)
 		make("UICorner", { CornerRadius = UDim.new(0, 12) }, b)
+		UiTheme.Panel(b, { Color = UiTheme.Tinted(CardVisuals.FactionColors[name] or ACCENT, 0.55) })
 		label(b, "Name", UDim2.fromScale(0.05, 0.05), UDim2.fromScale(0.9, 0.15), name, 34, { ZIndex = 9 })
 		label(b, "Info", UDim2.fromScale(0.08, 0.25), UDim2.fromScale(0.84, 0.65),
 			("%s\n\nCommander: %s\nCelestial: %s"):format(starter.Description,

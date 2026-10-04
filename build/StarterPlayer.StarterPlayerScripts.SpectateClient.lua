@@ -22,6 +22,7 @@ local TweenService = game:GetService("TweenService")
 local CardDatabase = require(ReplicatedStorage:WaitForChild("CardDatabase"))
 local CardVisuals = require(ReplicatedStorage:WaitForChild("CardVisuals"))
 local UiAssets = require(ReplicatedStorage:WaitForChild("UiAssets"))
+local UiTheme = require(ReplicatedStorage:WaitForChild("UiTheme"))
 local okMats, Playmats = pcall(function()
 	return require(ReplicatedStorage:WaitForChild("Playmats", 10))
 end)
@@ -94,7 +95,7 @@ local function button(parent, name, text, position, size, color, maxSize)
 	make("UITextSizeConstraint", { MaxTextSize = maxSize or 18, MinTextSize = 10 }, b)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6),
 		PaddingTop = UDim.new(0, 3), PaddingBottom = UDim.new(0, 3) }, b)
-	return b
+	return UiTheme.Button(b)
 end
 
 local function corner(parent, radius)
@@ -103,7 +104,9 @@ end
 
 local function clear(parent)
 	for _, child in ipairs(parent:GetChildren()) do
-		child:Destroy()
+		if not child:GetAttribute("ThemePart") then -- (keeps the menu's border and plate)
+			child:Destroy()
+		end
 	end
 end
 
@@ -465,6 +468,7 @@ renderView = function()
 			BackgroundColor3 = PANEL,
 		}, viewRoot)
 		corner(pill, UDim.new(0.5, 0))
+		UiTheme.List(pill)
 		label(pill, "TurnText", UDim2.fromScale(0.05, 0.1), UDim2.fromScale(0.9, 0.8),
 			turnText .. (snap.Turn and ("   (turn " .. snap.Turn .. ")") or ""), 20)
 	end
@@ -478,6 +482,7 @@ renderView = function()
 		BackgroundTransparency = 0.35,
 	}, viewRoot)
 	corner(bar)
+	UiTheme.Panel(bar, { Thickness = 12 })
 	label(bar, "Watching", UDim2.fromScale(0.02, 0.06), UDim2.fromScale(0.58, 0.5),
 		("WATCHING TABLE %d   %s"):format(snap.Table, matchTitle(snap)), 20,
 		{ TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = GOLD })
@@ -547,6 +552,7 @@ local listFrame = make("Frame", {
 	Visible = false,
 }, hud)
 corner(listFrame)
+UiTheme.Panel(listFrame, { Thickness = 12 })
 
 renderList = function()
 	clear(listFrame)

@@ -15,6 +15,7 @@ local CardDatabase = require(ReplicatedStorage:WaitForChild("CardDatabase"))
 local CardVisuals = require(ReplicatedStorage:WaitForChild("CardVisuals"))
 local EconomyConfig = require(ReplicatedStorage:WaitForChild("EconomyConfig"))
 local UiAssets = require(ReplicatedStorage:WaitForChild("UiAssets"))
+local UiTheme = require(ReplicatedStorage:WaitForChild("UiTheme"))
 local remotes = ReplicatedStorage:WaitForChild("EconomyRemotes")
 local walletUpdate = remotes:WaitForChild("WalletUpdate")
 local request = remotes:WaitForChild("EconomyRequest")
@@ -57,7 +58,7 @@ local wallet = make("Frame", {
 	BackgroundTransparency = 0.15,
 }, gui)
 make("UICorner", { CornerRadius = UDim.new(0, 10) }, wallet)
-make("UIStroke", { Color = Color3.fromRGB(150, 120, 60), Thickness = 1.5, Transparency = 0.2 }, wallet)
+UiTheme.Panel(wallet, { Thickness = 10 })
 
 local amounts = {}
 local CURRENCIES = {

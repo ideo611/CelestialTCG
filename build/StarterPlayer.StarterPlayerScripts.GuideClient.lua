@@ -25,6 +25,7 @@ local RunService = game:GetService("RunService")
 
 local CardArt = require(ReplicatedStorage:WaitForChild("CardArt"))
 local SoundAssets = require(ReplicatedStorage:WaitForChild("SoundAssets"))
+local UiTheme = require(ReplicatedStorage:WaitForChild("UiTheme"))
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -87,7 +88,7 @@ local function button(parent, name, value, position, size, color)
 	make("UICorner", { CornerRadius = UDim.new(0, 10) }, b)
 	make("UITextSizeConstraint", { MinTextSize = 16, MaxTextSize = 30 }, b)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }, b)
-	return b
+	return UiTheme.Button(b)
 end
 
 local function panel(parent, name, position, size)
@@ -101,8 +102,7 @@ local function panel(parent, name, position, size)
 		Visible = false,
 	}, parent)
 	make("UICorner", { CornerRadius = UDim.new(0, 14) }, frame)
-	make("UIStroke", { Color = GOLD, Thickness = 2 }, frame)
-	return frame
+	return UiTheme.Panel(frame)
 end
 
 local gui = make("ScreenGui", {
@@ -192,7 +192,7 @@ local firstMatch = make("Frame", {
 }, gui)
 make("UISizeConstraint", { MinSize = Vector2.new(320, 80) }, firstMatch)
 make("UICorner", { CornerRadius = UDim.new(0, 12) }, firstMatch)
-make("UIStroke", { Color = GOLD, Thickness = 2 }, firstMatch)
+UiTheme.Panel(firstMatch)
 text(firstMatch, "FirstMatchText", UDim2.fromScale(0.03, 0.1), UDim2.fromScale(0.6, 0.8),
 	"NEXT: play your first match against the Practice Bot!", { TextXAlignment = Enum.TextXAlignment.Left })
 local playFirstButton = button(firstMatch, "PlayFirstMatch", "Play now", UDim2.fromScale(0.66, 0.15),
@@ -266,7 +266,7 @@ local box = make("Frame", {
 	ZIndex = 20,
 }, gui)
 make("UICorner", { CornerRadius = UDim.new(0, 10) }, box)
-make("UIStroke", { Color = GOLD, Thickness = 3 }, box)
+UiTheme.Panel(box)
 text(box, "TutorialSpeaker", UDim2.fromScale(0.05, 0.02), UDim2.fromScale(0.9, 0.1), "Captain Sol Varro",
 	{ TextColor3 = GOLD, ZIndex = 21 })
 local boxTitle = text(box, "TutorialTitle", UDim2.fromScale(0.05, 0.14), UDim2.fromScale(0.9, 0.2), "",

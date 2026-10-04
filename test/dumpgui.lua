@@ -103,6 +103,14 @@ return function(root, width, height)
 					entry.Image = prop(child, "Image")
 					entry.ImageT = prop(child, "ImageTransparency") or 0
 					entry.ImageColor = color(prop(child, "ImageColor3") or Color3.new(1, 1, 1))
+					local st = prop(child, "ScaleType")
+					if st and st.Name == "Slice" then
+						local r = prop(child, "SliceCenter")
+						if r then
+							entry.Slice = { r.Min.X, r.Min.Y, r.Max.X, r.Max.Y }
+							entry.SliceScale = prop(child, "SliceScale") or 1
+						end
+					end
 				end
 				local corner = child:FindFirstChildOfClass("UICorner")
 				if corner then

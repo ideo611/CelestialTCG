@@ -21,6 +21,7 @@ local UserInputService = game:GetService("UserInputService")
 local CardDatabase = require(ReplicatedStorage:WaitForChild("CardDatabase"))
 local CardVisuals = require(ReplicatedStorage:WaitForChild("CardVisuals"))
 local UiAssets = require(ReplicatedStorage:WaitForChild("UiAssets"))
+local UiTheme = require(ReplicatedStorage:WaitForChild("UiTheme"))
 local SoundAssets = require(ReplicatedStorage:WaitForChild("SoundAssets"))
 local remotes = ReplicatedStorage:WaitForChild("BinderRemotes")
 local request = remotes:WaitForChild("BinderRequest")
@@ -95,12 +96,14 @@ local function button(parent, name, text, position, size, color)
 	make("UITextSizeConstraint", { MaxTextSize = 18, MinTextSize = 10 }, b)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6),
 		PaddingTop = UDim.new(0, 3), PaddingBottom = UDim.new(0, 3) }, b)
-	return b
+	return UiTheme.Button(b)
 end
 
 local function clear(parent)
 	for _, child in ipairs(parent:GetChildren()) do
-		child:Destroy()
+		if not child:GetAttribute("ThemePart") then -- (keeps the menu's border and plate)
+			child:Destroy()
+		end
 	end
 end
 
@@ -276,8 +279,9 @@ local backdrop = make("Frame", {
 	BackgroundTransparency = 0.15,
 	BorderSizePixel = 0,
 }, gui)
-local title = label(backdrop, "BinderTitle", UDim2.new(0.03, 0, 0, 14), UDim2.new(0.45, 0, 0, 40), "", 32,
-	{ TextXAlignment = Enum.TextXAlignment.Left })
+UiTheme.Backdrop(backdrop, { Seed = 31 })
+local title = UiTheme.Title(label(backdrop, "BinderTitle", UDim2.new(0.03, 0, 0, 14), UDim2.new(0.45, 0, 0, 40), "", 32,
+	{ TextXAlignment = Enum.TextXAlignment.Left }))
 local subtitle = label(backdrop, "BinderStats", UDim2.new(0.03, 0, 0, 54), UDim2.new(0.45, 0, 0, 22), "", 18,
 	{ TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = MUTED, Font = Enum.Font.Gotham })
 local closeButton = button(backdrop, "CloseBinder", "Close", UDim2.new(0.87, 0, 0, 14), UDim2.new(0.1, 0, 0, 40), GREY)

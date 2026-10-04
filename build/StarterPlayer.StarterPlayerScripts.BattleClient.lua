@@ -2218,15 +2218,30 @@ function playEvent.CelestialSummoned(e)
 	}, fxLayer)
 	make("UIAspectRatioConstraint", { AspectRatio = CARD_ASPECT }, showcase)
 	local showcaseScale = make("UIScale", { Scale = 0.7 }, showcase)
-	CardVisuals.Draw(showcase, e.CardId, { Finish = finishFor(side, e.CardId) })
-	for _, d in ipairs(showcase:GetDescendants()) do
-		if d:IsA("GuiObject") then
-			d.ZIndex = d.ZIndex + 18
+	local function raise()
+		for _, d in ipairs(showcase:GetDescendants()) do
+			if d:IsA("GuiObject") and not d:GetAttribute("Raised") then
+				d:SetAttribute("Raised", true)
+				d.ZIndex = d.ZIndex + 18
+			end
 		end
 	end
+	-- it rises face down from the Star Gate, then turns over
+	CardVisuals.DrawFaceDown(showcase, "")
+	raise()
 	playEvent._fx(nil, "SummonPillar", 1, { Position = UDim2.fromScale(0.44, 0.4), Size = 0.75, Duration = 0.9, ZIndex = 17 })
 	tween(showcaseScale, 0.35, { Scale = 1.05 }, Enum.EasingStyle.Back)
-	pause(0.75)
+	pause(0.3)
+	if animSpeed > 0 then
+		CardVisuals.Flip(showcase, function(target)
+			CardVisuals.Draw(target, e.CardId, { Finish = finishFor(side, e.CardId) })
+			raise()
+		end, { Duration = seconds(0.38), Tease = GOLD, TeaseTime = seconds(0.22) })
+	else
+		CardVisuals.Draw(showcase, e.CardId, { Finish = finishFor(side, e.CardId) })
+		raise()
+	end
+	pause(0.5)
 	tween(showcaseScale, 0.2, { Scale = 0.3 })
 	tween(dim, 0.25, { BackgroundTransparency = 1 })
 	pause(0.18)

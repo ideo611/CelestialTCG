@@ -17,6 +17,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CardDatabase = require(ReplicatedStorage:WaitForChild("CardDatabase"))
 local CardVisuals = require(ReplicatedStorage:WaitForChild("CardVisuals"))
 local UiAssets = require(ReplicatedStorage:WaitForChild("UiAssets"))
+local UiTheme = require(ReplicatedStorage:WaitForChild("UiTheme"))
 local SoundAssets = require(ReplicatedStorage:WaitForChild("SoundAssets"))
 local remotes = ReplicatedStorage:WaitForChild("EconomyRemotes")
 local walletUpdate = remotes:WaitForChild("WalletUpdate")
@@ -81,17 +82,19 @@ local function button(parent, name, text, position, size, color)
 		PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6),
 		PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4),
 	}, b)
-	return b
+	return UiTheme.Button(b)
 end
 
 local function clear(parent)
 	for _, child in ipairs(parent:GetChildren()) do
-		child:Destroy()
+		if not child:GetAttribute("ThemePart") then -- (keeps the menu's border and plate)
+			child:Destroy()
+		end
 	end
 end
 
 local function scroller(parent, name, position, size)
-	return make("ScrollingFrame", {
+	return UiTheme.List(make("ScrollingFrame", {
 		Name = name,
 		Position = position,
 		Size = size,
@@ -100,7 +103,7 @@ local function scroller(parent, name, position, size)
 		ScrollBarThickness = 8,
 		CanvasSize = UDim2.new(0, 0, 0, 0),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-	}, parent)
+	}, parent))
 end
 
 local function cardGrid(frame)
@@ -219,6 +222,7 @@ local gui = make("ScreenGui", {
 	Enabled = false,
 }, player.PlayerGui)
 local root = make("Frame", { Name = "Root", Size = UDim2.fromScale(1, 1), BackgroundColor3 = BG, BorderSizePixel = 0 }, gui)
+UiTheme.Backdrop(root, { Seed = 21 })
 
 local collectionTab = button(root, "CollectionTab", "Collection", UDim2.new(0.02, 0, 0, 12), UDim2.new(0.14, 0, 0, 40))
 local decksTab = button(root, "DecksTab", "Decks", UDim2.new(0.17, 0, 0, 12), UDim2.new(0.12, 0, 0, 40))
@@ -244,7 +248,7 @@ local inspect = make("TextButton", {
 	Name = "Inspect",
 	Size = UDim2.fromScale(1, 1),
 	BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-	BackgroundTransparency = 0.35,
+	BackgroundTransparency = 0.2,
 	Text = "",
 	AutoButtonColor = false,
 	Visible = false,
@@ -439,6 +443,7 @@ local function renderDecks()
 			BorderSizePixel = 0,
 		}, list)
 		make("UICorner", { CornerRadius = UDim.new(0, 8) }, row)
+		UiTheme.Panel(row, { Color = UiTheme.Tinted(row.BackgroundColor3, 0.55), Thickness = 12 })
 		label(row, {
 			Name = "DeckName",
 			Position = UDim2.new(0, 12, 0, 6),
@@ -638,6 +643,7 @@ local function renderEditor()
 		Text = editor.Name,
 	}, content)
 	make("UICorner", { CornerRadius = UDim.new(0, 6) }, nameBox)
+	UiTheme.List(nameBox)
 	nameBox.FocusLost:Connect(function()
 		editor.Name = nameBox.Text
 	end)
@@ -659,6 +665,7 @@ local function renderEditor()
 		BorderSizePixel = 0,
 	}, content)
 	make("UICorner", { CornerRadius = UDim.new(0, 6) }, meter)
+	UiTheme.List(meter)
 	local starCap = CardDatabase.DeckFormats[CardDatabase.FormatOf(editor.Format)].StarCap
 	local over = starCap ~= nil and stars > starCap
 	local fill = make("Frame", {
@@ -812,6 +819,7 @@ local function renderEditor()
 		local row = make("Frame", { Name = "Leader_" .. leader[1], LayoutOrder = i - 10, Size = UDim2.new(1, 0, 0, 34),
 			BackgroundColor3 = CardVisuals.FactionColors[card.Faction], BorderSizePixel = 0 }, listFrame)
 		make("UICorner", { CornerRadius = UDim.new(0, 6) }, row)
+		UiTheme.List(row, { Color = UiTheme.Tinted(row.BackgroundColor3, 0.6) })
 		label(row, { Name = "LeaderName", Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(0.66, -8, 1, 0),
 			TextXAlignment = Enum.TextXAlignment.Left, MaxText = 15, Text = leader[1] .. ": " .. card.Name })
 		finishButton(row, leader[2], UDim2.new(0.68, 0, 0, 2), UDim2.new(0.32, 0, 1, -4))

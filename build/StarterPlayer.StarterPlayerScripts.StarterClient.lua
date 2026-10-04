@@ -18,6 +18,7 @@ local CardVisuals = require(ReplicatedStorage:WaitForChild("CardVisuals"))
 local FactionInfo = require(ReplicatedStorage:WaitForChild("FactionInfo"))
 local Playmats = require(ReplicatedStorage:WaitForChild("Playmats"))
 local UiAssets = require(ReplicatedStorage:WaitForChild("UiAssets"))
+local UiTheme = require(ReplicatedStorage:WaitForChild("UiTheme"))
 local shopRemotes = ReplicatedStorage:WaitForChild("ShopRemotes")
 local shopEvent = shopRemotes:WaitForChild("ShopEvent")
 local shopRequest = shopRemotes:WaitForChild("ShopRequest")
@@ -80,12 +81,14 @@ local function button(parent, name, text, position, size, color)
 	make("UITextSizeConstraint", { MaxTextSize = 20, MinTextSize = 10 }, b)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8),
 		PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4) }, b)
-	return b
+	return UiTheme.Button(b)
 end
 
 local function clear(parent)
 	for _, child in ipairs(parent:GetChildren()) do
-		child:Destroy()
+		if not child:GetAttribute("ThemePart") then -- (keeps the menu's border and plate)
+			child:Destroy()
+		end
 	end
 end
 
@@ -113,8 +116,9 @@ local gui = make("ScreenGui", {
 local openEvent = make("BindableEvent", { Name = "OpenStarterBrowser" }, gui)
 
 local root = make("Frame", { Name = "Root", Size = UDim2.fromScale(1, 1), BackgroundColor3 = BG, BorderSizePixel = 0 }, gui)
-local title = label(root, "Title", UDim2.new(0.02, 0, 0, 12), UDim2.new(0.7, 0, 0, 40), "Starter Decks", 30,
-	{ TextXAlignment = Enum.TextXAlignment.Left })
+UiTheme.Backdrop(root, { Seed = 41 })
+local title = UiTheme.Title(label(root, "Title", UDim2.new(0.02, 0, 0, 12), UDim2.new(0.7, 0, 0, 40), "Starter Decks", 30,
+	{ TextXAlignment = Enum.TextXAlignment.Left }))
 local closeButton = button(root, "CloseStarters", "Close", UDim2.new(0.86, 0, 0, 12), UDim2.new(0.12, 0, 0, 40), GREY)
 local body = make("Frame", {
 	Name = "Body",
@@ -235,7 +239,7 @@ function render()
 		BackgroundColor3 = PANEL,
 	}, body)
 	make("UICorner", { CornerRadius = UDim.new(0, 12) }, mid)
-	make("UIStroke", { Color = color, Thickness = 2 }, mid)
+	UiTheme.Panel(mid, { Color = UiTheme.Tinted(color, 0.2) })
 	local bigEmblem = UiAssets.Icon(UiAssets.Emblems[selected], UDim2.fromOffset(52, 52), UDim2.new(1, -66, 0, 8), mid)
 	label(mid, "FactionName", UDim2.new(0, 18, 0, 10), UDim2.new(1, bigEmblem and -90 or -36, 0, 44), selected, 36,
 		{ TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = color:Lerp(WHITE, 0.45) })
@@ -317,6 +321,7 @@ function render()
 		BackgroundColor3 = PANEL,
 	}, right)
 	make("UICorner", { CornerRadius = UDim.new(0, 8) }, matFrame)
+	UiTheme.List(matFrame, { Color = false })
 	Playmats.Draw(matFrame, mat.Id, 0)
 	label(right, "PlaymatName", UDim2.fromScale(0, 0.755), UDim2.fromScale(1, 0.04), "Comes with the " .. mat.Name .. " playmat", 16,
 		{ Font = Enum.Font.Gotham })

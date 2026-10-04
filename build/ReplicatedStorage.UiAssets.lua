@@ -25,6 +25,9 @@ UiAssets.PanelFrame = id(86255685203929)
 -- the frame image's border thickness, in pixels of the 1024px image
 UiAssets.PanelSlice = Rect.new(96, 96, 928, 928)
 UiAssets.BinderCover = id(134618557712131)
+-- the metal button plate (tinted per button) and its 9-slice corners
+UiAssets.ButtonPlate = id(134304204813444)
+UiAssets.ButtonPlateSlice = Rect.new(96, 96, 1440, 928)
 UiAssets.Victory = id(101327852010684)
 UiAssets.Defeat = id(107880539606279)
 

@@ -300,6 +300,7 @@ function CardVisuals.DrawInfoPanel(parent, cardId, options)
 	}, parent)
 	make("UICorner", { CornerRadius = UDim.new(0, 10) }, panel)
 	make("UIStroke", { Color = Color3.fromRGB(255, 205, 90), Thickness = 1.5, Transparency = 0.4 }, panel)
+	require(ReplicatedStorage:WaitForChild("UiTheme")).Panel(panel, { Color = false })
 	local title = make("TextLabel", {
 		Name = "CardInfoTitle",
 		Position = UDim2.fromScale(0.05, 0.03),
@@ -1490,6 +1491,140 @@ function CardVisuals.DrawFaceDown(target, label)
 		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
 	}, target)
 	text(target, "FaceDown", UDim2.fromScale(0.1, 0.3), UDim2.fromScale(0.8, 0.4), label, 22)
+end
+
+
+---------------------------------------------------------------------
+-- Card flip: turns the card drawn in target over to show a new face.
+--   drawFront(target)  draws the new face (target is cleared first)
+--   options:
+--     Duration  seconds for the whole turn (default 0.42)
+--     Tease     a Color3: before turning, the card glows that color and
+--               trembles (for big pulls), for TeaseTime seconds (default 0.6)
+--     Shine     false = no white flash across the new face
+--     OnShown   called the moment the new face appears
+-- Waits until the flip is done (use task.spawn to flip several at once).
+-- The card narrows to an edge (lifting a little, like it's picked up), the
+-- face swaps, and it widens back out.
+---------------------------------------------------------------------
+local TweenService = game:GetService("TweenService")
+
+local function faceIn(target)
+	return target:FindFirstChild("CardFace") or target:FindFirstChild("CardBack")
+end
+
+local function play(object, t, props, style, direction)
+	local tw = TweenService:Create(object, TweenInfo.new(t, style or Enum.EasingStyle.Quad,
+		direction or Enum.EasingDirection.Out), props)
+	tw:Play()
+	return tw
+end
+
+-- Swaps the face's keep-the-shape constraint for a fixed pixel size, so the
+-- face can be squeezed sideways. Returns the size and a function that undoes it.
+local function unlockShape(face)
+	local size = face.AbsoluteSize
+	local constraint = face:FindFirstChildOfClass("UIAspectRatioConstraint")
+	if constraint then
+		constraint.Parent = nil
+	end
+	return size, function()
+		if face.Parent then
+			face.Size = UDim2.fromScale(1, 1)
+			if constraint then
+				constraint.Parent = face
+			end
+		end
+	end
+end
+
+function CardVisuals.Flip(target, drawFront, options)
+	options = options or {}
+	local duration = options.Duration or 0.42
+	local half = duration / 2
+	local face = faceIn(target)
+	if not face or not RunService:IsClient() or duration <= 0 then
+		target:ClearAllChildren()
+		drawFront(target)
+		if options.OnShown then
+			options.OnShown()
+		end
+		return
+	end
+
+	-- 1. Tease: the back glows and trembles before a big pull turns over
+	if options.Tease then
+		local glow = make("UIStroke", {
+			Name = "TeaseGlow",
+			Color = options.Tease,
+			Thickness = 1,
+			Transparency = 0.1,
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		}, face)
+		local existing = face:FindFirstChild("RarityStroke")
+		if existing then
+			existing.Enabled = false
+		end
+		local teaseTime = options.TeaseTime or 0.6
+		play(glow, teaseTime, { Thickness = 7 }, Enum.EasingStyle.Sine, Enum.EasingDirection.In)
+		local started = os.clock()
+		local basePos = face.Position
+		while os.clock() - started < teaseTime do
+			local k = (os.clock() - started) / teaseTime -- trembles harder as it builds
+			face.Rotation = math.sin(os.clock() * 55) * 2.5 * k
+			face.Position = basePos + UDim2.fromOffset(math.sin(os.clock() * 41) * 2 * k, 0)
+			task.wait()
+		end
+		face.Rotation = 0
+		face.Position = basePos
+	end
+
+	-- 2. Narrow to an edge
+	local size = unlockShape(face)
+	local w, h = size.X, size.Y
+	face.Size = UDim2.fromOffset(w, h)
+	play(face, half, { Size = UDim2.fromOffset(0, h * 1.08) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	task.wait(half)
+
+	-- 3. Swap the face (only the card itself: target's own scale/shape stay)
+	face:Destroy()
+	drawFront(target)
+	local front = faceIn(target)
+	if options.OnShown then
+		options.OnShown()
+	end
+	if not front then
+		return
+	end
+	local _, restore = unlockShape(front)
+	front.Size = UDim2.fromOffset(0, h * 1.08)
+
+	-- 4. Widen back out, with a white shine across the new face
+	play(front, half, { Size = UDim2.fromOffset(w, h) }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	if options.Shine ~= false then
+		local shine = make("Frame", {
+			Name = "FlipShine",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = Color3.fromRGB(255, 250, 235),
+			BackgroundTransparency = 0.25,
+			BorderSizePixel = 0,
+			ZIndex = 30,
+		}, front)
+		local topZ = 0
+		for _, d in ipairs(front:GetDescendants()) do
+			if d:IsA("GuiObject") and d ~= shine then
+				topZ = math.max(topZ, d.ZIndex)
+			end
+		end
+		shine.ZIndex = topZ + 1
+		make("UICorner", { CornerRadius = UDim.new(0.06, 0) }, shine)
+		play(shine, half * 1.6, { BackgroundTransparency = 1 })
+		task.delay(half * 1.7, function()
+			shine:Destroy()
+		end)
+	end
+	task.wait(half)
+	restore()
 end
 
 

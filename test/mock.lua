@@ -366,7 +366,7 @@ local CLASSES = {
 	Frame = merge(BASE, GUI_OBJECT, { "Style" }),
 	CanvasGroup = merge(BASE, GUI_OBJECT, { "GroupColor3", "GroupTransparency" }),
 	ScrollingFrame = merge(BASE, GUI_OBJECT, { "CanvasSize", "ScrollBarThickness", "ScrollingDirection",
-		"AutomaticCanvasSize", "CanvasPosition", "ScrollBarImageColor3", "ElasticBehavior", "ScrollingEnabled" }),
+		"AutomaticCanvasSize", "CanvasPosition", "ScrollBarImageColor3", "ScrollBarImageTransparency", "ElasticBehavior", "ScrollingEnabled" }),
 	TextLabel = merge(BASE, GUI_OBJECT, TEXT),
 	TextButton = merge(BASE, GUI_OBJECT, TEXT, BUTTON),
 	TextBox = merge(BASE, GUI_OBJECT, TEXT, { "PlaceholderText", "PlaceholderColor3", "ClearTextOnFocus", "MultiLine" }),

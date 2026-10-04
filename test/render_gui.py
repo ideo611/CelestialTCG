@@ -13,7 +13,12 @@ KNOWN = {
     "83792005053121": UP + "bc3f472b-cmd-sol-01_captain_sol_varro.png",
     "111007143043644": UP + "4119884a-cmd-lun-01_tidekeeper_selene.png",
     "120865299160887": UP + "025b6fc2-mat-solar-forge.png",
+    "134304204813444": UP + "23370aa6-button-plate.png",
+    # (preview stand-in for the window frame: the zone frame has the same style)
+    "86255685203929": UP + "8f23ad69-zone-frame.png",
 }
+# the stand-in's own corners differ from the real frame's
+SLICE_OVERRIDE = {"86255685203929": (150, 150, 874, 1386)}
 _cache = {}
 
 
@@ -60,6 +65,27 @@ def wrap(draw, text, f, w):
     return out
 
 
+def nine_slice(src, rect, scale, w, h):
+    x0, y0, x1, y1 = [int(v) for v in rect]
+    sw, sh = src.size
+    out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    l, t, r, b = [max(0, int(v * scale)) for v in (x0, y0, sw - x1, sh - y1)]
+    if l + r > w:
+        k = w / max(1, l + r); l, r = int(l * k), int(r * k)
+    if t + b > h:
+        k = h / max(1, t + b); t, b = int(t * k), int(b * k)
+    xs_src, ys_src = [0, x0, x1, sw], [0, y0, y1, sh]
+    xs_dst, ys_dst = [0, l, w - r, w], [0, t, h - b, h]
+    for i in range(3):
+        for j in range(3):
+            sx0, sx1, sy0, sy1 = xs_src[i], xs_src[i + 1], ys_src[j], ys_src[j + 1]
+            dx0, dx1, dy0, dy1 = xs_dst[i], xs_dst[i + 1], ys_dst[j], ys_dst[j + 1]
+            if sx1 <= sx0 or sy1 <= sy0 or dx1 <= dx0 or dy1 <= dy0:
+                continue
+            out.paste(src.crop((sx0, sy0, sx1, sy1)).resize((dx1 - dx0, dy1 - dy0)), (dx0, dy0))
+    return out
+
+
 def render(entries, width, height, path, bg=(0, 0, 0)):
     base = Image.new("RGBA", (width, height), bg + (255,))
     for e in entries:
@@ -74,7 +100,7 @@ def render(entries, width, height, path, bg=(0, 0, 0)):
         if alpha > 0:
             if e.get("Grad"):
                 g = Image.new("RGBA", (max(1, int(w)), max(1, int(h))))
-                c1, c2 = e["Grad"]
+                c1, c2 = [tuple(int(c[k] * e["Bg"][k] / 255) for k in range(3)) for c in e["Grad"]]
                 vertical = abs(e.get("GradRot", 0)) % 180 == 90
                 n = g.height if vertical else g.width
                 for i in range(n):
@@ -92,7 +118,18 @@ def render(entries, width, height, path, bg=(0, 0, 0)):
             ia = int(255 * (1 - e.get("ImageT", 0)))
             key = str(img).replace("rbxassetid://", "")
             if key in KNOWN and int(w) > 0 and int(h) > 0:
-                im = load(KNOWN[key]).resize((int(w), int(h)))
+                src = load(KNOWN[key])
+                tint = e.get("ImageColor")
+                if e.get("Slice"):
+                    im = nine_slice(src, SLICE_OVERRIDE.get(key, e["Slice"]), e.get("SliceScale", 1), int(w), int(h))
+                else:
+                    im = src.resize((int(w), int(h)))
+                if tint and tuple(tint) != (255, 255, 255):
+                    r_, g_, b_, a_ = im.split()
+                    r_ = r_.point(lambda v, t=tint[0]: v * t // 255)
+                    g_ = g_.point(lambda v, t=tint[1]: v * t // 255)
+                    b_ = b_.point(lambda v, t=tint[2]: v * t // 255)
+                    im = Image.merge("RGBA", (r_, g_, b_, a_))
                 if ia < 255:
                     a = im.split()[3].point(lambda v: v * ia // 255)
                     im.putalpha(a)
@@ -108,10 +145,13 @@ def render(entries, width, height, path, bg=(0, 0, 0)):
             total = len(lines) * lh
             ty = y + (h - total) / 2 if e["YAlign"] == "Center" else (y if e["YAlign"] == "Top" else y + h - total)
             ta = int(255 * (1 - e.get("TextT", 0)))
+            tcol = tuple(e["TextColor"])
+            if e.get("Grad") and e["BgT"] >= 1:
+                tcol = tuple(e["Grad"][0])
             for line in lines:
                 tw = d.textlength(line, font=f)
                 tx = x + (w - tw) / 2 if e["XAlign"] == "Center" else (x if e["XAlign"] == "Left" else x + w - tw)
-                d.text((tx, ty), line, font=f, fill=tuple(e["TextColor"]) + (ta,))
+                d.text((tx, ty), line, font=f, fill=tcol + (ta,))
                 ty += lh
         clip = e.get("Clip")
         if clip:

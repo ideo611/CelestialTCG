@@ -2367,7 +2367,7 @@ function playEvent._projectile(fromSlot, toSlot, kind)
 	end
 	local dx, dy = tx - fx, ty - fy
 	-- the trail image points up; turn it to point the way the head flies
-	local angle = math.deg(math.atan2(dx, -dy))
+	local angle = math.deg(math.atan(dx, -dy))
 	local width = headSize * 0.5
 	local start = os.clock()
 	while true do

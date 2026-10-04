@@ -23,8 +23,6 @@ local EconomyConfig = require(ReplicatedStorage:WaitForChild("EconomyConfig"))
 local PlayerData = require(ServerScriptService:WaitForChild("PlayerData"))
 local Analytics = require(ServerScriptService:WaitForChild("Analytics"))
 
-local shopEvent = ReplicatedStorage:WaitForChild("ShopRemotes"):WaitForChild("ShopEvent")
-
 local LOAD_WAIT_SECONDS = 20 -- how long a purchase waits for the buyer's cards to load
 
 local function waitForData(player)
@@ -60,7 +58,17 @@ local function processReceipt(receipt)
 	if status == "granted" then
 		local product = EconomyConfig.Products[key]
 		Analytics.Event(player, "robux_purchase", key, product.Robux)
-		shopEvent:FireClient(player, { Kind = "PurchaseDone", Product = key, Name = product.Name })
+		-- (the shop only offers these where allowed; a purchase made some other
+		-- way is still delivered, since it was paid for, but noted)
+		if PlayerData.IsRestricted and PlayerData.IsRestricted(player) then
+			warn(("PurchaseServer: %s bought %s while paid random items are restricted for them"):format(player.Name, key))
+			Analytics.Event(player, "restricted_purchase", key, product.Robux)
+		end
+		local remotes = ReplicatedStorage:FindFirstChild("ShopRemotes")
+		local shopEvent = remotes and remotes:FindFirstChild("ShopEvent")
+		if shopEvent then
+			shopEvent:FireClient(player, { Kind = "PurchaseDone", Product = key, Name = product.Name })
+		end
 	end
 	return Enum.ProductPurchaseDecision.PurchaseGranted
 end

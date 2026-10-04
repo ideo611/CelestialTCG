@@ -34,11 +34,12 @@ local Analytics = require(game:GetService("ServerScriptService"):WaitForChild("A
 
 local STORE_NAME = "PlayerData_v2" -- LAUNCH: fresh store; playtest saves stay in PlayerData_v1
 local LOAD_RETRIES = 3
-local LOCK_WAIT_TRIES = 5          -- tries (3 s apart) waiting for another server to let go of a save
-local LOCK_STALE_SECONDS = 1800    -- a lock this old belongs to a server that crashed
-local PURCHASE_LOG_SIZE = 200      -- how many Robux purchase ids each save remembers
--- This server's id (its lock on the saves it holds)
-local SESSION = (game.JobId ~= "" and game.JobId or ("local-" .. tostring(math.random(1, 1e9))))
+local LOCK_WAIT_TRIES = 10         -- tries (3 s apart) waiting for another server to let go of a save
+local LOCK_STALE_SECONDS = 600     -- a lock this old (autosave refreshes it every 3 min) is from a crashed server
+local PURCHASE_KEEP_SECONDS = 90 * 86400 -- Robux purchase ids are remembered at least this long
+local PURCHASE_LOG_MAX = 1000      -- ...and at most this many (oldest dropped first)
+local SAVE_SPACING = 7             -- seconds between ordinary saves (Roblox allows ~1 write per key per 6 s)
+local HttpService = game:GetService("HttpService")
 local DATA_VERSION = 1
 -- Bump when starter deck lists change: players who own a starter get any
 -- cards the new list has that they're missing.
@@ -50,7 +51,9 @@ PlayerData.PackOpened = nil -- set by ShopServer: function(player, pulls) called
 PlayerData.IsRestricted = nil -- set by ShopServer: function(player) -> true if paid random items are restricted
 PlayerData.Clock = os.time -- replaceable for testing
 
-local profiles = {} -- [player] = { Data = {...}, Temporary = bool }
+local profiles = {} -- [player] = { Data, Temporary, Token, Releasing, LostLock, LastSave, SaveQueued }
+local releasing = {} -- [userId] = number of saves still letting go of a save on this server
+local savesInFlight = 0
 local store = nil
 local random = Random and Random.new() or nil
 
@@ -204,18 +207,28 @@ local function now()
 	return os.time()
 end
 
--- Reads the save and takes this server's lock on it. Returns
--- ok, data (nil for a brand-new player), lockedBy (another server holding it)
-local function loadAndLock(ds, key, steal)
+-- A fresh id for each time a save is loaded (its lock). Each load gets its
+-- own, so even a rejoin on the same server waits for the old one to finish.
+local function newToken()
+	local ok, guid = pcall(function()
+		return HttpService:GenerateGUID(false)
+	end)
+	return ok and guid or ("t-" .. tostring(os.clock()) .. "-" .. tostring(math.random(1, 1e9)))
+end
+
+-- Reads the save and puts this load's lock on it. Returns
+-- ok, data (nil for a brand-new player), lockedBy (another lock holding it)
+local function loadAndLock(ds, key, token, steal)
 	local lockedBy = nil
 	local result
 	local ok, err = pcall(function()
 		ds:UpdateAsync(key, function(old)
 			lockedBy = nil
+			result = nil
 			if type(old) == "table" and type(old.SessionLock) == "table" then
 				local lock = old.SessionLock
 				local fresh = now() - (tonumber(lock.Time) or 0) < LOCK_STALE_SECONDS
-				if lock.Id ~= SESSION and fresh and not steal then
+				if lock.Id ~= token and fresh and not steal then
 					lockedBy = lock.Id
 					return nil -- leave it alone; we'll try again in a moment
 				end
@@ -223,7 +236,7 @@ local function loadAndLock(ds, key, steal)
 			local data = type(old) == "table" and old or nil
 			result = data
 			local stored = data or {}
-			stored.SessionLock = { Id = SESSION, Time = now() }
+			stored.SessionLock = { Id = token, Time = now() }
 			return stored
 		end)
 	end)
@@ -233,15 +246,34 @@ local function loadAndLock(ds, key, steal)
 	return true, result, lockedBy
 end
 
+-- Takes the lock back off a save (a player who left while it loaded)
+local function unlock(ds, key, token)
+	pcall(function()
+		ds:UpdateAsync(key, function(old)
+			if type(old) == "table" and type(old.SessionLock) == "table" and old.SessionLock.Id == token then
+				old.SessionLock = nil
+				return old
+			end
+			return nil
+		end)
+	end)
+end
+
 -- Returns true if loaded. On failure outside Studio the player is kicked,
 -- because giving them blank data could overwrite their real save.
 function PlayerData.Load(player)
 	local data, loaded = nil, false
 	local ds = getStore()
+	local token = newToken()
+	-- a rejoin on this same server: let the old visit finish saving first
+	local waited = os.clock()
+	while (releasing[player.UserId] or 0) > 0 and os.clock() - waited < 30 do
+		task.wait(0.25)
+	end
 	if ds then
 		local failures, lockWaits = 0, 0
 		while not loaded do
-			local ok, result, lockedBy = loadAndLock(ds, keyFor(player), lockWaits >= LOCK_WAIT_TRIES)
+			local ok, result, lockedBy = loadAndLock(ds, keyFor(player), token, lockWaits >= LOCK_WAIT_TRIES)
 			if ok and not lockedBy then
 				data = result
 				loaded = true
@@ -261,7 +293,10 @@ function PlayerData.Load(player)
 				task.wait(2)
 			end
 			if not player.Parent then
-				return false -- they left while we waited
+				if loaded then
+					unlock(ds, keyFor(player), token) -- they left while it loaded: don't leave the lock behind
+				end
+				return false
 			end
 		end
 	end
@@ -290,21 +325,22 @@ function PlayerData.Load(player)
 	grantMissingStarterMats(data)
 	topUpStarters(data)
 	grantPlaytestCoins(data)
-	profiles[player] = { Data = data, Temporary = false }
+	profiles[player] = { Data = data, Temporary = false, Token = token, LastSave = os.clock() }
 	PlayerData.ApplySettings(player)
 	player:SetAttribute("DataLoaded", true) -- lifts the loading screen
 	Analytics.Onboarding(player, "load_complete")
 	return true
 end
 
--- Saves the player's data. release = true also lets go of the lock (they left).
--- Returns true if the save went through.
+-- Saves the player's data now. release = true also lets go of the lock (they
+-- left). Returns true if the save went through. Only the load that holds the
+-- lock may write: if the lock is gone or someone else's, nothing is written.
 function PlayerData.Save(player, release)
 	local profile = profiles[player]
 	if not profile or profile.Temporary then
 		return true
 	end
-	if profile.LostLock then
+	if profile.LostLock or (profile.Releasing and not release) then
 		return false
 	end
 	local ds = getStore()
@@ -312,17 +348,22 @@ function PlayerData.Save(player, release)
 		return false
 	end
 	local lost = false
+	profile.LastSave = os.clock()
+	profile.SaveQueued = false
+	savesInFlight = savesInFlight + 1
 	local ok, err = pcall(function()
 		ds:UpdateAsync(keyFor(player), function(old)
 			lost = false
-			if type(old) == "table" and type(old.SessionLock) == "table" and old.SessionLock.Id ~= SESSION then
+			local lock = type(old) == "table" and old.SessionLock or nil
+			if type(lock) ~= "table" or lock.Id ~= profile.Token then
 				lost = true -- another server took this save over: don't overwrite its newer data
 				return nil
 			end
-			profile.Data.SessionLock = (not release) and { Id = SESSION, Time = now() } or nil
+			profile.Data.SessionLock = (not release) and { Id = profile.Token, Time = now() } or nil
 			return profile.Data
 		end)
 	end)
+	savesInFlight = savesInFlight - 1
 	if not ok then
 		warn(("PlayerData: save for %s failed: %s"):format(player.Name, tostring(err)))
 		return false
@@ -330,7 +371,7 @@ function PlayerData.Save(player, release)
 	if lost then
 		profile.LostLock = true
 		warn(("PlayerData: %s's save was taken over by another server; this server stops saving it."):format(player.Name))
-		if player.Parent then
+		if player.Parent and not profile.Releasing then
 			player:Kick("Your cards were opened on another server. Please rejoin.")
 		end
 		return false
@@ -338,9 +379,51 @@ function PlayerData.Save(player, release)
 	return true
 end
 
+-- Saves within a few seconds, batching quick changes (packs, singles, decks)
+-- into one write. (Robux purchases and leaving save right away instead.)
+function PlayerData.SaveSoon(player)
+	local profile = profiles[player]
+	if not profile or profile.Temporary or profile.SaveQueued then
+		return
+	end
+	profile.SaveQueued = true
+	local wait = math.max(0, SAVE_SPACING - (os.clock() - (profile.LastSave or 0)))
+	task.delay(wait, function()
+		if profiles[player] == profile and profile.SaveQueued then
+			PlayerData.Save(player)
+		end
+	end)
+end
+
+-- They left (or the server is closing): save and let go of the lock. Safe to call twice.
 function PlayerData.Release(player)
+	local profile = profiles[player]
+	if not profile or profile.Releasing then
+		return
+	end
+	profile.Releasing = true
+	local userId = player.UserId
+	releasing[userId] = (releasing[userId] or 0) + 1
 	PlayerData.Save(player, true)
-	profiles[player] = nil
+	releasing[userId] = releasing[userId] - 1
+	if releasing[userId] <= 0 then
+		releasing[userId] = nil
+	end
+	if profiles[player] == profile then
+		profiles[player] = nil
+	end
+end
+
+-- Server closing: let go of every save and wait (up to timeout seconds) until
+-- all writes, including ones already running for players who left, are done.
+function PlayerData.ReleaseAll(timeout)
+	for player in pairs(profiles) do
+		task.spawn(PlayerData.Release, player)
+	end
+	local started = os.clock()
+	while (next(profiles) ~= nil or savesInFlight > 0) and os.clock() - started < (timeout or 25) do
+		task.wait(0.1)
+	end
 end
 
 -- Battle settings: shown to the player's scripts as attributes
@@ -443,7 +526,7 @@ function PlayerData.ClaimStarter(player, deckName)
 		data.Coins = data.Coins + price
 		return false, message
 	end
-	PlayerData.Save(player)
+	PlayerData.SaveSoon(player)
 	Analytics.Onboarding(player, "starter_claimed", deckName)
 	Analytics.Event(player, "starter_claimed", deckName, price)
 	return true, price
@@ -632,7 +715,7 @@ function PlayerData.OpenPack(player, currency, packTypeId)
 		return false, "Pick a pack."
 	end
 	if currency == "Coins" then
-		if EconomyConfig.CoinsSoldForRobux and PlayerData.IsRestricted and PlayerData.IsRestricted(player) then
+		if EconomyConfig.CoinsSoldForRobux and (not PlayerData.IsRestricted or PlayerData.IsRestricted(player)) then
 			return false, "Packs can't be bought with coins in your region. You can still open packs with Star Shards."
 		end
 		if PlayerData.CoinPacksLeft(data) <= 0 then
@@ -660,7 +743,7 @@ function PlayerData.OpenPack(player, currency, packTypeId)
 
 	local pulls = rollPackInto(data, packTypeId)
 	changed(player)
-	PlayerData.Save(player) -- pack results are saved right away
+	PlayerData.SaveSoon(player) -- pack results are saved within a few seconds
 	Analytics.Event(player, "pack_opened", packTypeId .. ":" .. currency)
 	Analytics.Onboarding(player, "first_pack_opened", packTypeId)
 	if PlayerData.PackOpened then
@@ -687,6 +770,10 @@ function PlayerData.OpenBox(player, packTypeId)
 	if not packType then
 		return false, "Pick which booster the box holds."
 	end
+	local pool = Packs.GetPools(packType.Id).CommanderOrCelestial
+	if #pool == 0 then
+		return false, "That box can't be opened right now."
+	end
 	data.SealedBoxes = data.SealedBoxes - 1
 	local box = EconomyConfig.Box
 	local opened = {}
@@ -694,7 +781,6 @@ function PlayerData.OpenBox(player, packTypeId)
 		opened[i] = rollPackInto(data, packType.Id)
 	end
 	-- the topper: a Commander or Celestial, preferring ones they don't have yet
-	local pool = Packs.GetPools(packType.Id).CommanderOrCelestial
 	local missing = {}
 	for _, id in ipairs(pool) do
 		if PlayerData.CountOwned(data, id) == 0 then
@@ -717,7 +803,7 @@ function PlayerData.OpenBox(player, packTypeId)
 	addCopies(data, cardId, finish, 1)
 	data.BoxesOpened = (data.BoxesOpened or 0) + 1
 	changed(player)
-	PlayerData.Save(player)
+	PlayerData.SaveSoon(player)
 	Analytics.Event(player, "box_opened", packType.Id)
 	if PlayerData.PackOpened then
 		-- above their head: the topper, then any Legendary or Mythic pulls
@@ -758,6 +844,9 @@ function PlayerData.GrantPurchase(player, purchaseId, productKey)
 	if not data then
 		return nil, "not loaded"
 	end
+	if profiles[player].Releasing or profiles[player].LostLock then
+		return nil, "leaving" -- Roblox asks again on their next visit
+	end
 	local product = EconomyConfig.Products[productKey]
 	if not product then
 		return nil, "unknown product " .. tostring(productKey)
@@ -769,7 +858,9 @@ function PlayerData.GrantPurchase(player, purchaseId, productKey)
 	data.SealedBoxes = (data.SealedBoxes or 0) + (product.Boxes or 0)
 	data.RobuxSpent = (data.RobuxSpent or 0) + (product.Robux or 0)
 	table.insert(data.Purchases, { Id = purchaseId, Product = productKey, Time = os.time() })
-	while #data.Purchases > PURCHASE_LOG_SIZE do
+	-- forget ids only once they're old (Roblox never re-sends a confirmed purchase)
+	while #data.Purchases > 0 and (os.time() - (data.Purchases[1].Time or 0) > PURCHASE_KEEP_SECONDS
+		or #data.Purchases > PURCHASE_LOG_MAX) do
 		table.remove(data.Purchases, 1)
 	end
 	changed(player)
@@ -843,7 +934,7 @@ function PlayerData.BreakDownExtras(player)
 	end
 	data.StarShards = data.StarShards + total
 	changed(player)
-	PlayerData.Save(player)
+	PlayerData.SaveSoon(player)
 	return true, total
 end
 
@@ -866,7 +957,7 @@ function PlayerData.ExchangeTokens(player, cardId)
 	local finish = EconomyConfig.FinishForRarity[card.Rarity] or "Base"
 	addCopies(data, cardId, finish, 1)
 	changed(player)
-	PlayerData.Save(player)
+	PlayerData.SaveSoon(player)
 	return true, { CardId = cardId, Finish = finish }
 end
 
@@ -917,7 +1008,7 @@ function PlayerData.BuySingle(player, cardId)
 	local isNew = PlayerData.CountOwned(data, cardId) == 0
 	addCopies(data, cardId, entry.Finish, 1)
 	changed(player)
-	PlayerData.Save(player)
+	PlayerData.SaveSoon(player)
 	return true, { CardId = cardId, Finish = entry.Finish, Price = entry.Price, New = isNew }
 end
 
@@ -1109,7 +1200,7 @@ function PlayerData.SaveDeck(player, input, name)
 	deck.Cards = cards
 	deck.Finishes = finishes
 	changed(player)
-	PlayerData.Save(player)
+	PlayerData.SaveSoon(player)
 	return true, deck.Id
 end
 
@@ -1124,7 +1215,7 @@ function PlayerData.DeleteDeck(player, id)
 	end
 	table.remove(data.Decks, index)
 	changed(player)
-	PlayerData.Save(player)
+	PlayerData.SaveSoon(player)
 	return true
 end
 
@@ -1171,7 +1262,7 @@ function PlayerData.BuyMat(player, matId)
 	data.OwnedMats[matId] = true
 	data.EquippedMat = matId -- put it straight on the table
 	changed(player)
-	PlayerData.Save(player)
+	PlayerData.SaveSoon(player)
 	return true, mat.Name
 end
 

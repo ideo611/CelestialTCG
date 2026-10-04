@@ -305,6 +305,10 @@ function Packs.GetOddsTable(packTypeId)
 	result.PackName = packType.Name
 	result.PityText = ("Every pack gives %d Star Token. Trade %d Star Tokens for any Commander or Celestial of your choice.")
 		:format(EconomyConfig.TokensPerPack, EconomyConfig.TokenExchangeCost)
+	-- duplicate protection changes which card you get (never how likely the rarity is)
+	result.DuplicateText = "Duplicate protection: a Legendary or Mythic pull is always one you don't have yet "
+		.. "(until you have them all), so the per-card chances above are for a collector who has none of them; "
+		.. "the rarity chances are the same for everyone."
 	return result
 end
 

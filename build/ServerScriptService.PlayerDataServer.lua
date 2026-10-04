@@ -68,19 +68,9 @@ end)
 
 -- Save everyone when the server shuts down
 game:BindToClose(function()
-	-- save and let go of everyone's save (in parallel: shutdown has ~30 s)
-	local pending = 0
-	for _, player in ipairs(Players:GetPlayers()) do
-		pending = pending + 1
-		task.spawn(function()
-			PlayerData.Save(player, true)
-			pending = pending - 1
-		end)
-	end
-	local started = os.clock()
-	while pending > 0 and os.clock() - started < 25 do
-		task.wait(0.1)
-	end
+	-- save and let go of everyone's save, and wait for saves still running
+	-- for players who just left (shutdown allows about 30 seconds)
+	PlayerData.ReleaseAll(25)
 end)
 
 task.spawn(function()

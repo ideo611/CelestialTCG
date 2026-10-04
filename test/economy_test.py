@@ -75,7 +75,7 @@ store.Data["u_202"] = { Coins = 777, Collection = {}, OwnedStarters = {}, Sessio
 local amy = M.addPlayer("Amy", 202)
 M.run(6)
 check("waits while another server holds the save", not PlayerData.IsLoaded(amy))
-M.run(15)
+M.run(30)
 check("takes over a save that isn't let go", PlayerData.IsLoaded(amy) and PlayerData.Get(amy).Coins == 777)
 -- stale lock (crashed server) is taken over at once
 store.Data["u_303"] = { Coins = 55, Collection = {}, OwnedStarters = {}, SessionLock = { Id = "dead", Time = os.time() - 99999 } }
@@ -87,9 +87,32 @@ store.Data["u_303"].SessionLock = { Id = "newer-server", Time = os.time() }
 store.Data["u_303"].Coins = 999
 local okSave = PlayerData.Save(bo)
 check("a save taken by another server isn't overwritten", okSave == false and store.Data["u_303"].Coins == 999)
--- leaving lets go of the lock
+-- leaving lets go of the lock, and nothing puts it back afterwards
 PlayerData.Release(amy)
 check("leaving releases the lock", store.Data["u_202"].SessionLock == nil)
+PlayerData.Save(amy)
+check("a save after leaving doesn't lock it again", store.Data["u_202"].SessionLock == nil)
+-- the lock is per visit: a save with no lock (someone else's visit ended) isn't overwritten
+local cy = M.addPlayer("Cy", 404)
+M.run(1)
+store.Data["u_404"].SessionLock = nil
+store.Data["u_404"].Coins = 4321
+check("a save someone else let go of isn't overwritten", PlayerData.Save(cy) == false and store.Data["u_404"].Coins == 4321)
+-- receipts while leaving are left for next time
+local dee = M.addPlayer("Dee", 505)
+M.run(1)
+EconomyConfig.Products.Ticket1.ProductId = 1001
+local profileDee = PlayerData.Get(dee)
+local saveFn = PlayerData.Save
+local releaseThread = coroutine.create(function() PlayerData.Release(dee) end)
+-- simulate: release has started (Releasing set) when a receipt arrives
+PlayerData.Save = function(p, release) if release then coroutine.yield() end return saveFn(p, release) end
+coroutine.resume(releaseThread)
+PlayerData.Save = saveFn
+local dLeave = MPS.ProcessReceipt({ PlayerId = 505, ProductId = 1001, PurchaseId = "rcpt-leaving" })
+check("a receipt during leaving isn't confirmed (asked again next visit)", dLeave == NotYet and (profileDee.Tickets or 0) == 0)
+coroutine.resume(releaseThread)
+EconomyConfig.Products.Ticket1.ProductId = 0
 
 -- 2. economy numbers
 check("packs cost 50 coins, 3 coin packs a day", EconomyConfig.PackPriceCoins == 50 and EconomyConfig.DailyCoinPacks == 3)
@@ -175,7 +198,10 @@ check("no sealed box, no opening", not okBox2, msgBox2)
 
 -- 7. purchase log stays small
 for i = 1, 260 do PlayerData.GrantPurchase(nik, "bulk-" .. i, "Ticket1") end
-check("purchase log is capped", #data.Purchases == 200, #data.Purchases)
+check("recent purchase ids are all remembered", #data.Purchases >= 260, #data.Purchases)
+table.insert(data.Purchases, 1, { Id = "ancient", Product = "Ticket1", Time = os.time() - 200 * 86400 })
+PlayerData.GrantPurchase(nik, "bulk-new", "Ticket1")
+check("only very old purchase ids are forgotten", not PlayerData.HasPurchase(data, "ancient") and PlayerData.HasPurchase(data, "bulk-1"))
 
 -- 8. restricted regions can't buy tickets/boxes
 local restrictedFn = PlayerData.IsRestricted

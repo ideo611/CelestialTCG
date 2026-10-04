@@ -248,9 +248,9 @@ local function showOddsDetails()
 	make("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) }, oddsList)
 	make("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingTop = UDim.new(0, 8), PaddingRight = UDim.new(0, 16) }, oddsList)
 	local order = 0
-	local function line(text, bold, color)
+	local function line(text, bold, color, height)
 		order = order + 1
-		label(oddsList, "Line_" .. order, UDim2.new(), UDim2.new(1, 0, 0, bold and 28 or 22), text, bold and 20 or 16, {
+		label(oddsList, "Line_" .. order, UDim2.new(), UDim2.new(1, 0, 0, height or (bold and 28 or 22)), text, bold and 20 or 16, {
 			LayoutOrder = order,
 			ZIndex = 5,
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -276,6 +276,9 @@ local function showOddsDetails()
 		end
 	end
 	line(oddsTable.PityText, true, GOLD)
+	if oddsTable.DuplicateText then
+		line(oddsTable.DuplicateText, false, Color3.fromRGB(200, 190, 230), 48)
+	end
 	oddsPopup.Visible = true
 	oddsPopup:FindFirstChild("OddsTitle").Text = "Card-by-card odds: " .. (oddsTable.PackName or "Booster")
 end
@@ -693,6 +696,9 @@ local function renderPacks()
 		end
 		table.insert(lines, "")
 		table.insert(lines, oddsTable.PityText)
+		if oddsTable.DuplicateText then
+			table.insert(lines, oddsTable.DuplicateText)
+		end
 	else
 		table.insert(lines, "Loading odds...")
 	end
@@ -1313,6 +1319,13 @@ local function renderBoxes()
 			"Tickets and boxes can't be bought in your region. You can still earn free pack tickets by playing.", 18,
 			{ TextColor3 = Color3.fromRGB(255, 200, 140) })
 	end
+
+	-- every ticket and box pack uses the normal pack odds
+	local oddsButton = button(content, "BoxesOdds", "Pack odds", UDim2.new(0.82, 0, 0.64, 2), UDim2.new(0.17, 0, 0, 30))
+	oddsButton.Activated:Connect(function()
+		loadOdds(packType)
+		showOddsDetails()
+	end)
 
 	-- the shelf: sealed boxes waiting to be opened
 	local shelf = make("Frame", {

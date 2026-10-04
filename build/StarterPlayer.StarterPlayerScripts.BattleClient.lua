@@ -569,6 +569,16 @@ local formatNote = label(pickerFrame, {
 	Text = "",
 })
 local vsBotPicker = false
+-- Practice bot difficulty: Normal (default, easier) or Hard
+local chosenDifficulty = "Normal"
+local difficultyButtons = {}
+for i, info in ipairs({ { "Normal", "Normal bot" }, { "Hard", "Hard bot" } }) do
+	local b = button(pickerFrame, "Bot" .. info[1], info[2],
+		UDim2.fromScale(0.73 + (i - 1) * 0.115, 0.17), UDim2.fromScale(0.105, 0.06), TINT.Grey)
+	b.ZIndex = 6
+	b.Visible = false
+	difficultyButtons[info[1]] = b
+end
 local opponentVote = nil
 
 local function refreshFormat()
@@ -576,8 +586,16 @@ local function refreshFormat()
 		setTint(b, bestOf == chosenFormat and TINT.Inspect or TINT.Grey)
 		setStroke(b, bestOf == chosenFormat and HIGHLIGHT or nil, 2)
 	end
+	for difficulty, b in pairs(difficultyButtons) do
+		b.Visible = vsBotPicker
+		b.ImageColor3 = difficulty == chosenDifficulty and (difficulty == "Hard" and TINT.EndTurn or TINT.Inspect)
+			or TINT.Grey
+		setStroke(b, difficulty == chosenDifficulty and HIGHLIGHT or nil, 2)
+	end
 	if vsBotPicker then
-		formatNote.Text = "How many games do you want to play?"
+		formatNote.Text = chosenDifficulty == "Hard"
+			and "How many games? Hard bot plans ahead and plays to win."
+			or "How many games? Normal bot is good for learning. Try Hard bot for a challenge."
 	else
 		local theirs = opponentVote and ("Opponent voted best of " .. opponentVote .. ".")
 			or "Opponent hasn't voted yet."
@@ -592,6 +610,12 @@ end
 for bestOf, b in pairs(formatButtons) do
 	b.Activated:Connect(function()
 		chosenFormat = bestOf
+		refreshFormat()
+	end)
+end
+for difficulty, b in pairs(difficultyButtons) do
+	b.Activated:Connect(function()
+		chosenDifficulty = difficulty
 		refreshFormat()
 	end)
 end
@@ -3325,7 +3349,8 @@ local function showDeckPicker(decks)
 				pickerError.Text = deck.Name .. " isn't ready yet: " .. deck.Description
 				return
 			end
-			send({ Kind = "ChooseDeck", Deck = deck.Key, BestOf = chosenFormat })
+			send({ Kind = "ChooseDeck", Deck = deck.Key, BestOf = chosenFormat,
+				BotDifficulty = vsBotPicker and chosenDifficulty or nil })
 		end)
 	end
 end

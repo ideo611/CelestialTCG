@@ -14,6 +14,9 @@
 	It never looks at your hand, your deck or your face-down Anomalies: it
 	only sees what you'd see.
 	BattleBot.TakeTurnSimple is the old one-step bot (kept for comparisons).
+
+	Two difficulties for practice: "Normal" (the default, an easier bot that
+	plays like a beginner, BattleBot.TakeTurnEasy) and "Hard" (the planner).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -283,6 +286,137 @@ function BattleBot.TakeTurnSimple(battle, seat, onEvents, pause)
 end
 
 ---------------------------------------------------------------------
+-- The Normal (easier) bot: the default practice opponent
+-- Plays like a beginner: it plays cards it can afford in no special order,
+-- puts units in a random open lane, picks targets loosely, doesn't save the
+-- Spark for the right moment (never uses it), and sometimes ends its turn
+-- with energy left over. Still plays its Celestial and Commander ability, so
+-- it shows new players everything the game does.
+---------------------------------------------------------------------
+BattleBot.Difficulties = { "Normal", "Hard" }
+BattleBot.DefaultDifficulty = "Normal"
+local EASY = {
+	StopChance = 0.12,    -- after each play, chance it just ends its turn
+	AbilityChance = 0.5,  -- chance it uses its Commander ability when it could
+	SloppyTarget = 0.35,  -- chance it aims at a random target instead of the best
+}
+
+local easyRng = Random.new()
+
+local function shuffled(list)
+	for i = #list, 2, -1 do
+		local j = easyRng:NextInteger(1, i)
+		list[i], list[j] = list[j], list[i]
+	end
+	return list
+end
+
+local function looseTargets(state, seat, effect)
+	local targets = targetsFor(state, seat, effect)
+	if #targets > 1 and easyRng:NextNumber() < EASY.SloppyTarget then
+		shuffled(targets)
+	end
+	return targets
+end
+
+local function tryEasyAction(battle, seat, playedSomething)
+	if playedSomething and easyRng:NextNumber() < EASY.StopChance then
+		return false
+	end
+	local state = battle:GetState(seat)
+	local me = state.Players[seat]
+	local open = {}
+	for lane = 1, LANES do
+		if not me.Lanes[lane] then
+			table.insert(open, lane)
+		end
+	end
+	shuffled(open)
+
+	if not me.StarGate.OnBoard and #open > 0 and me.StarGate.Cost <= me.Energy then
+		local ok, events = battle:SummonCelestial(seat, open[1])
+		if ok then
+			return true, events
+		end
+	end
+
+	local order = {}
+	for i, cardId in ipairs(me.Hand) do
+		table.insert(order, { Index = i, Card = CardDatabase.GetCard(cardId) })
+	end
+	shuffled(order)
+	for _, entry in ipairs(order) do
+		local card = entry.Card
+		local hpCost = card.HPCost or 0
+		if card.EnergyCost <= me.Energy and (hpCost == 0 or me.HP > hpCost + 6) then
+			local attempts = {}
+			if card.Type == "Unit" then
+				if open[1] then
+					attempts = { { Lane = open[1] } }
+				end
+			else
+				for _, target in ipairs(looseTargets(state, seat, card.Effect)) do
+					table.insert(attempts, { Target = target or nil })
+				end
+			end
+			for _, options in ipairs(attempts) do
+				local ok, events = battle:PlayCard(seat, entry.Index, options)
+				if ok then
+					return true, events
+				end
+			end
+		end
+	end
+
+	if not me.AbilityUsed and easyRng:NextNumber() < EASY.AbilityChance then
+		local ability = CardDatabase.GetCard(me.CommanderId).CommanderAbility
+		local effect = ability.Effect
+		if effect.Kind ~= "PayForEnergy" then
+			for _, target in ipairs(looseTargets(state, seat, effect)) do
+				local ok, events = battle:UseCommanderAbility(seat, target or nil)
+				if ok then
+					return true, events
+				end
+			end
+		end
+	end
+	return false
+end
+
+function BattleBot.TakeTurnEasy(battle, seat, onEvents, pause)
+	local played = false
+	for _ = 1, 20 do
+		if battle.Winner or battle.Current ~= seat then
+			return
+		end
+		local ok, events = tryEasyAction(battle, seat, played)
+		if not ok then
+			break
+		end
+		played = true
+		onEvents(events)
+		if pause then
+			pause()
+		end
+	end
+	if battle.Winner or battle.Current ~= seat then
+		return
+	end
+	local ok, events = battle:EndTurn(seat)
+	if ok then
+		onEvents(events)
+	end
+end
+
+-- The Normal bot keeps whatever hand it's dealt
+function BattleBot.ChooseMulliganFor(difficulty, battle, seat)
+	if difficulty == "Hard" then
+		return BattleBot.ChooseMulligan(battle, seat)
+	end
+	return {}
+end
+
+---------------------------------------------------------------------
 -- The planner
 ---------------------------------------------------------------------
 local Rules = CardDatabase.Rules
@@ -475,7 +609,11 @@ end
 
 -- Plays out the bot's whole turn.
 -- onEvents(events) is called after every action; pause() runs between actions.
-function BattleBot.TakeTurn(battle, seat, onEvents, pause)
+-- difficulty: "Normal" (default practice bot) or "Hard" (the planner)
+function BattleBot.TakeTurn(battle, seat, onEvents, pause, difficulty)
+	if difficulty == "Normal" then
+		return BattleBot.TakeTurnEasy(battle, seat, onEvents, pause)
+	end
 	if not battle.CloneForSearch then
 		return BattleBot.TakeTurnSimple(battle, seat, onEvents, pause)
 	end

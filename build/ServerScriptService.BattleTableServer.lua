@@ -418,6 +418,11 @@ local function createTable(index, position, parent, options)
 	local afterAction
 	local startGame
 
+	-- the tutorial keeps its own scripted opponent (the planner)
+	local function botDifficulty()
+		return (not tutorial) and (match.BotDifficulty or BattleBot.DefaultDifficulty) or nil
+	end
+
 	local function runBotTurn(battle, seat)
 		BattleBot.TakeTurn(battle, seat, function(events)
 			if match.Battle == battle then
@@ -425,7 +430,7 @@ local function createTable(index, position, parent, options)
 			end
 		end, function()
 			task.wait(BOT_ACTION_DELAY)
-		end)
+		end, botDifficulty())
 		if match.Battle == battle then
 			afterAction()
 		end
@@ -490,7 +495,8 @@ local function createTable(index, position, parent, options)
 						send(occupant, { Kind = "Reward", Coins = coins, Bonus = bonus or 0, VsBot = vsBot,
 							Won = won, MatchesPlayed = played })
 						Analytics.Event(occupant, vsBot and "practice_match_completed" or "pvp_match_completed",
-							won and "won" or "lost", math.floor(duration))
+							(won and "won" or "lost") .. (vsBot and ("_" .. string.lower(match.BotDifficulty or "normal")) or ""),
+							math.floor(duration))
 						if played == 1 then
 							Analytics.Onboarding(occupant, "first_match_completed", vsBot and "bot" or "pvp")
 						end
@@ -644,7 +650,7 @@ local function createTable(index, position, parent, options)
 		for seat = 1, 2 do
 			if match.Seats[seat] == BOT then
 				task.delay(1, function()
-					mulligan(seat, BattleBot.ChooseMulligan(battle, seat))
+					mulligan(seat, BattleBot.ChooseMulliganFor(botDifficulty() or "Hard", battle, seat))
 				end)
 			end
 		end
@@ -943,6 +949,10 @@ local function createTable(index, position, parent, options)
 			local other = match.Seats[otherSeat]
 			if isHuman(other) and not match.Decks[otherSeat] then
 				send(other, { Kind = "OpponentVote", BestOf = match.Votes[seat], DeckFormat = deck.Format })
+			end
+			if match.Seats[otherSeat] == BOT then
+				-- practice bot difficulty (Normal unless they picked Hard)
+				match.BotDifficulty = action.BotDifficulty == "Hard" and "Hard" or "Normal"
 			end
 			if match.Seats[otherSeat] == BOT and not match.Decks[otherSeat] then
 				local order = CardDatabase.StarterDeckOrder

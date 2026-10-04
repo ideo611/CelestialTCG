@@ -256,8 +256,8 @@ local function showInspect(cardId)
 	local big = make("Frame", {
 		Name = "BigCard",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.46),
-		Size = UDim2.fromScale(0.5, 0.75),
+		Position = UDim2.fromScale(0.3, 0.46),
+		Size = UDim2.fromScale(0.45, 0.75),
 		ZIndex = 10,
 	}, inspect)
 	make("UIAspectRatioConstraint", { AspectRatio = CARD_W / CARD_H }, big)
@@ -268,12 +268,19 @@ local function showInspect(cardId)
 			child.ZIndex = 11
 		end
 	end
+	-- what the card is and what its keywords mean
+	CardVisuals.DrawInfoPanel(inspect, cardId, {
+		Position = UDim2.fromScale(0.55, 0.09),
+		Size = UDim2.fromScale(0.41, 0.74),
+		ZIndex = 11,
+		Owned = "You own: " .. finishesText(cardId),
+	})
 	label(inspect, {
 		Name = "InspectInfo",
-		Position = UDim2.fromScale(0.2, 0.86),
-		Size = UDim2.fromScale(0.6, 0.06),
+		Position = UDim2.fromScale(0.2, 0.87),
+		Size = UDim2.fromScale(0.6, 0.05),
 		ZIndex = 11,
-		Text = ("You own: %s   (click anywhere to close)"):format(finishesText(cardId)),
+		Text = "Hold the card to move the light  |  tap anywhere else to close",
 	})
 	inspect.Visible = true
 end
@@ -905,6 +912,12 @@ decksTab.Activated:Connect(function()
 		return
 	end
 	view = "Decks"
+	render()
+end)
+-- Other screens (the match summary) can open this: CollectionGui.OpenCollection:Fire()
+make("BindableEvent", { Name = "OpenCollection" }, gui).Event:Connect(function()
+	SoundAssets.Play("MenuOpen")
+	gui.Enabled = true
 	render()
 end)
 openButton.Activated:Connect(function()

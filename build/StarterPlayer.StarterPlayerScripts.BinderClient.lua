@@ -408,8 +408,8 @@ local function showZoom(pocket)
 	local big = make("Frame", {
 		Name = "BigCard",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.45),
-		Size = UDim2.fromScale(0.5, 0.72),
+		Position = UDim2.fromScale(0.3, 0.45),
+		Size = UDim2.fromScale(0.45, 0.72),
 		BackgroundTransparency = 1,
 		ZIndex = 20,
 	}, zoom)
@@ -422,6 +422,13 @@ local function showZoom(pocket)
 		end
 	end
 	local card = CardDatabase.GetCard(pocket.CardId)
+	-- what the card is and what its keywords mean
+	CardVisuals.DrawInfoPanel(zoom, pocket.CardId, {
+		Position = UDim2.fromScale(0.55, 0.08),
+		Size = UDim2.fromScale(0.41, 0.72),
+		ZIndex = 21,
+		Finish = (not pocket.Missing) and pocket.Finish or nil,
+	})
 	local info
 	if pocket.Missing then
 		info = card.Name .. ": not in this binder yet"
@@ -429,7 +436,7 @@ local function showZoom(pocket)
 		local finishName = CardVisuals.FinishNames[pocket.Finish] or pocket.Finish
 		info = ("%s  |  %s%s"):format(card.Name, finishName, pocket.Count > 1 and ("  |  x" .. pocket.Count) or "")
 	end
-	label(zoom, "ZoomInfo", UDim2.fromScale(0.25, 0.83), UDim2.fromScale(0.5, 0.045), info, 22, { ZIndex = 21 })
+	label(zoom, "ZoomInfo", UDim2.fromScale(0.05, 0.83), UDim2.fromScale(0.5, 0.045), info, 22, { ZIndex = 21 })
 	if mine and not pocket.Missing then
 		local on = isShowcased(pocket.CardId, pocket.Finish)
 		local full = #(binder.Showcase or {}) >= POCKETS
@@ -454,7 +461,7 @@ local function showZoom(pocket)
 			setShowcase(list)
 		end)
 	end
-	label(zoom, "ZoomHint", UDim2.fromScale(0.35, 0.95), UDim2.fromScale(0.3, 0.035), "Click anywhere else to close", 16,
+	label(zoom, "ZoomHint", UDim2.fromScale(0.3, 0.95), UDim2.fromScale(0.4, 0.035), "Hold the card to move the light  |  tap anywhere else to close", 16,
 		{ ZIndex = 21, TextColor3 = MUTED, Font = Enum.Font.Gotham })
 	zoom.Visible = true
 end

@@ -208,6 +208,132 @@ function CardVisuals.AbilityOnlyText(card)
 end
 
 ---------------------------------------------------------------------
+-- Card details for inspect views (collection, binder): what the card is and
+-- what every word on it means, in plain language.
+-- CardVisuals.DescribeCard(cardId, options) -> rich-text lines
+--   options.Finish   the finish being shown
+--   options.Owned    "You own: ..." text (optional)
+-- CardVisuals.DrawInfoPanel(parent, cardId, options) draws a panel with them:
+--   options.Position, options.Size (scale UDim2s), options.ZIndex
+---------------------------------------------------------------------
+local TYPE_HELP = {
+	Unit = "Units go into one of your 3 lanes. When you end your turn, they attack the lane straight across (an empty lane hits the enemy Commander).",
+	Spell = "Spells happen once, then go to your graveyard.",
+	Commander = "Your Commander leads your deck (20 HP). Use its ability once per turn. If it reaches 0 HP, you lose.",
+	Celestial = "Your Celestial waits face-down in your Star Gate. Summon it into an empty lane; if it's defeated it goes back to the gate and costs 2 more next time.",
+	Anomaly = "Anomalies are set face-down and spring on your opponent's turn.",
+}
+
+local function esc(value)
+	return (tostring(value):gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;"))
+end
+
+function CardVisuals.DescribeCard(cardId, options)
+	options = options or {}
+	local card = CardDatabase.GetCard(cardId)
+	local lines = {}
+	if not card then
+		return lines
+	end
+	local faction = card.Faction == "Neutral" and "Neutral" or card.Faction
+	local head = ("%s %s  |  %s"):format(faction, card.Type, card.Rarity)
+	if card.StarCost then
+		head = head .. ("  |  %d star%s"):format(card.StarCost, card.StarCost == 1 and "" or "s")
+	end
+	table.insert(lines, ('<font color="#AAA0C8">%s</font>'):format(esc(head)))
+	local cost = {}
+	if card.EnergyCost then
+		table.insert(cost, ("%d energy"):format(card.EnergyCost))
+	end
+	if card.HPCost then
+		table.insert(cost, ("%d of your Commander's HP"):format(card.HPCost))
+	end
+	if card.Power and card.Type ~= "Commander" then
+		table.insert(lines, ("<b>Power %d  |  Health %d</b>"):format(card.Power, card.HP or 0))
+	elseif card.Type == "Commander" then
+		table.insert(lines, ("<b>Health %d</b>"):format(card.HP or 20))
+	end
+	if #cost > 0 then
+		table.insert(lines, "<b>Costs:</b> " .. esc(table.concat(cost, " + ")))
+	end
+	table.insert(lines, "")
+	for _, entry in ipairs(CardVisuals.KeywordEntries(card)) do
+		local title, info = CardVisuals.KeywordExplain(entry)
+		table.insert(lines, ('<b><font color="#FFCD5A">%s</font></b>: %s'):format(esc(title), esc(info)))
+	end
+	local rest = CardVisuals.AbilityOnlyText(card)
+	if rest ~= "" then
+		table.insert(lines, esc(rest))
+	end
+	table.insert(lines, "")
+	if TYPE_HELP[card.Type] then
+		table.insert(lines, ('<font color="#AAA0C8">%s</font>'):format(esc(TYPE_HELP[card.Type])))
+	end
+	if card.Rarity == "Legendary" and CardDatabase.IsMainDeckType(card.Type) then
+		table.insert(lines, ('<font color="#FFCD5A">%s</font>'):format("Legendary: only 1 copy per deck."))
+	end
+	if options.Finish or options.Owned then
+		table.insert(lines, "")
+	end
+	if options.Finish then
+		table.insert(lines, ('<font color="#AAA0C8">Finish: %s</font>'):format(
+			esc(CardVisuals.FinishNames[options.Finish] or options.Finish)))
+	end
+	if options.Owned then
+		table.insert(lines, ('<font color="#AAA0C8">%s</font>'):format(esc(options.Owned)))
+	end
+	return lines
+end
+
+function CardVisuals.DrawInfoPanel(parent, cardId, options)
+	options = options or {}
+	local card = CardDatabase.GetCard(cardId)
+	local z = options.ZIndex or 20
+	local panel = make("Frame", {
+		Name = "CardInfo",
+		Position = options.Position or UDim2.fromScale(0.55, 0.1),
+		Size = options.Size or UDim2.fromScale(0.38, 0.72),
+		BackgroundColor3 = Color3.fromRGB(20, 16, 40),
+		BackgroundTransparency = 0.08,
+		BorderSizePixel = 0,
+		ZIndex = z,
+	}, parent)
+	make("UICorner", { CornerRadius = UDim.new(0, 10) }, panel)
+	make("UIStroke", { Color = Color3.fromRGB(255, 205, 90), Thickness = 1.5, Transparency = 0.4 }, panel)
+	local title = make("TextLabel", {
+		Name = "CardInfoTitle",
+		Position = UDim2.fromScale(0.05, 0.03),
+		Size = UDim2.fromScale(0.9, 0.09),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamBold,
+		TextColor3 = Color3.fromRGB(255, 205, 90),
+		TextScaled = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Text = card and card.Name or "",
+		ZIndex = z + 1,
+	}, panel)
+	make("UITextSizeConstraint", { MinTextSize = 14, MaxTextSize = 30 }, title)
+	local body = make("TextLabel", {
+		Name = "CardInfoText",
+		Position = UDim2.fromScale(0.05, 0.14),
+		Size = UDim2.fromScale(0.9, 0.83),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.Gotham,
+		TextColor3 = Color3.fromRGB(255, 255, 255),
+		TextScaled = true,
+		TextWrapped = true,
+		RichText = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		Text = table.concat(CardVisuals.DescribeCard(cardId, options), "\n"),
+		ZIndex = z + 1,
+	}, panel)
+	-- readable on a phone, never huge on a big screen
+	make("UITextSizeConstraint", { MinTextSize = 12, MaxTextSize = options.TextSize or 19 }, body)
+	return panel
+end
+
+---------------------------------------------------------------------
 -- On-board status, drawn over the whole card so it reads at a glance:
 --   Summoning sickness (can't attack yet): the art dims to a cold blue, a
 --     big "Zzz" badge sits on it and a ribbon says "READY NEXT TURN".

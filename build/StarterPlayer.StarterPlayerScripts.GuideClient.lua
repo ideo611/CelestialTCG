@@ -12,7 +12,8 @@
 	  - "Play your first match" banner after the tutorial (or Skip), until the
 	    first real match is played. Its button starts a practice match against
 	    the bot right away (no table needed).
-	  - After the first match: what you earned and a button to the shop.
+	  - After every match: Victory / Defeat, coins earned, progress to the next
+	    pack, and Open a pack (or My Cards) / Play vs Bot / Close.
 	  - HUD buttons: "Play vs Bot" (any time) and "How to play" (replay the
 	    tutorial), plus a reminder of the first-win-of-the-day bonus.
 	  - Battle screen: the turn timer in player-vs-player matches.
@@ -120,8 +121,10 @@ local state = {
 	TurnMine = false,
 	TurnSeconds = 60,
 	OfferDismissed = false,
-	PayoffShown = false,
+	Series = nil,       -- { Won, Coins, Bonus, Games, First } for the match summary
 }
+
+local showSummary -- defined below
 
 local function battleGui()
 	return playerGui:FindFirstChild("BattleGui")
@@ -196,18 +199,38 @@ local playFirstButton = button(firstMatch, "PlayFirstMatch", "Play now", UDim2.f
 	UDim2.fromScale(0.31, 0.7))
 
 ---------------------------------------------------------------------
--- After the first match: the payoff
+-- After every match: result, coins, progress to the next pack, what next
 ---------------------------------------------------------------------
-local payoff = panel(gui, "FirstMatchPayoff", UDim2.fromScale(0.5, 0.5), UDim2.fromScale(0.46, 0.42))
-make("UISizeConstraint", { MinSize = Vector2.new(300, 220) }, payoff)
-text(payoff, "PayoffTitle", UDim2.fromScale(0.05, 0.06), UDim2.fromScale(0.9, 0.16), "First match done!",
+local payoff = panel(gui, "MatchSummary", UDim2.fromScale(0.5, 0.5), UDim2.fromScale(0.5, 0.5))
+make("UISizeConstraint", { MinSize = Vector2.new(320, 260) }, payoff)
+local payoffTitle = text(payoff, "SummaryTitle", UDim2.fromScale(0.05, 0.05), UDim2.fromScale(0.9, 0.16), "",
 	{ TextColor3 = GOLD })
-local payoffText = text(payoff, "PayoffText", UDim2.fromScale(0.06, 0.25), UDim2.fromScale(0.88, 0.38), "",
+local payoffText = text(payoff, "SummaryText", UDim2.fromScale(0.06, 0.23), UDim2.fromScale(0.88, 0.22), "",
 	{ Font = Enum.Font.Gotham })
-local payoffShop = button(payoff, "PayoffOpenShop", "Open a pack", UDim2.fromScale(0.06, 0.7),
-	UDim2.fromScale(0.42, 0.2))
-local payoffAgain = button(payoff, "PayoffPlayAgain", "Play again", UDim2.fromScale(0.52, 0.7),
-	UDim2.fromScale(0.42, 0.2), GREY)
+-- progress toward the next pack
+local barBack = make("Frame", {
+	Name = "PackProgress",
+	Position = UDim2.fromScale(0.06, 0.48),
+	Size = UDim2.fromScale(0.88, 0.07),
+	BackgroundColor3 = Color3.fromRGB(50, 44, 80),
+	BorderSizePixel = 0,
+}, payoff)
+make("UICorner", { CornerRadius = UDim.new(1, 0) }, barBack)
+local barFill = make("Frame", {
+	Name = "Fill",
+	Size = UDim2.fromScale(0, 1),
+	BackgroundColor3 = GOLD,
+	BorderSizePixel = 0,
+}, barBack)
+make("UICorner", { CornerRadius = UDim.new(1, 0) }, barFill)
+local barText = text(payoff, "PackProgressText", UDim2.fromScale(0.06, 0.56), UDim2.fromScale(0.88, 0.1), "",
+	{ Font = Enum.Font.Gotham, TextColor3 = Color3.fromRGB(200, 195, 225) })
+local payoffShop = button(payoff, "SummaryOpenShop", "Open a pack", UDim2.fromScale(0.04, 0.72),
+	UDim2.fromScale(0.3, 0.18))
+local payoffAgain = button(payoff, "SummaryPlayAgain", "Play vs Bot", UDim2.fromScale(0.35, 0.72),
+	UDim2.fromScale(0.3, 0.18), Color3.fromRGB(70, 110, 190))
+local payoffClose = button(payoff, "SummaryClose", "Close", UDim2.fromScale(0.66, 0.72),
+	UDim2.fromScale(0.3, 0.18), GREY)
 
 ---------------------------------------------------------------------
 -- HUD: Play vs Bot, How to play, first-win reminder
@@ -461,11 +484,17 @@ howButton.Activated:Connect(function()
 end)
 payoffShop.Activated:Connect(function()
 	payoff.Visible = false
-	local shopGui = playerGui:FindFirstChild("ShopGui")
-	local open = shopGui and shopGui:FindFirstChild("OpenShop")
+	-- enough coins: the shop; otherwise the collection
+	local canBuy = payoffShop:GetAttribute("CanBuy")
+	local targetGui = playerGui:FindFirstChild(canBuy and "ShopGui" or "CollectionGui")
+	local open = targetGui and targetGui:FindFirstChild(canBuy and "OpenShop" or "OpenCollection")
 	if open then
 		open:Fire()
 	end
+	refresh()
+end)
+payoffClose.Activated:Connect(function()
+	payoff.Visible = false
 	refresh()
 end)
 payoffAgain.Activated:Connect(function()
@@ -473,8 +502,45 @@ payoffAgain.Activated:Connect(function()
 	startPractice()
 end)
 
+-- The match summary, once the battle screen has closed
+showSummary = function(series)
+	local EconomyConfig = require(ReplicatedStorage:WaitForChild("EconomyConfig"))
+	local bg = battleGui()
+	local started = os.clock()
+	while bg and bg.Enabled and os.clock() - started < 10 do
+		task.wait(0.3)
+	end
+	task.wait(0.4) -- let the wallet catch up with the reward
+	local summary = state.Summary or {}
+	local coins = summary.Coins or 0
+	local price = EconomyConfig.PackPriceCoins or 100
+	payoffTitle.Text = (series.First and "First match done! " or "") .. (series.Won and "Victory!" or "Defeat")
+	local earned = series.Coins + series.Bonus
+	local line
+	if earned > 0 then
+		line = ("+%d coins"):format(earned)
+		if series.Bonus > 0 then
+			line = line .. (" (including a %d first-win bonus)"):format(series.Bonus)
+		end
+	else
+		line = "No coins this time (the daily coin limit was reached, or the match was very short)."
+	end
+	if series.First then
+		line = line .. "\nCoins buy booster packs at the shop counter."
+	end
+	payoffText.Text = line
+	local canBuy = coins >= price
+	barFill.Size = UDim2.fromScale(math.clamp(coins / price, 0, 1), 1)
+	barText.Text = canBuy and ("%d coins: you can open a pack!"):format(coins)
+		or ("%d / %d coins to your next pack"):format(coins, price)
+	payoffShop.Text = canBuy and "Open a pack" or "My Cards"
+	payoffShop:SetAttribute("CanBuy", canBuy)
+	payoff.Visible = true
+	refresh()
+end
+
 ---------------------------------------------------------------------
--- Battle updates: the tutorial, the turn timer, the first-match payoff
+-- Battle updates: the tutorial, the turn timer, the match summary
 ---------------------------------------------------------------------
 local turnTimer -- created on the battle screen the first time it's needed
 local function getTurnTimer()
@@ -552,25 +618,21 @@ battleUpdate.OnClientEvent:Connect(function(payload)
 				or "Good try! You know the basics now. The bot is waiting whenever you're ready."
 		end
 	elseif payload.Kind == "Reward" then
-		if (payload.MatchesPlayed or 0) == 1 and not state.PayoffShown then
-			state.PayoffShown = true
-			local earned = (payload.Coins or 0) + (payload.Bonus or 0)
-			local line = ("You earned %d coins"):format(earned)
-			if (payload.Bonus or 0) > 0 then
-				line = line .. (" (including a %d first-win bonus)"):format(payload.Bonus)
-			end
-			payoffText.Text = line .. ". Spend coins on booster packs at the shop counter, or keep playing to earn more!"
-			task.delay(5, function()
-				local bg = battleGui()
-				-- wait until the battle screen closes
-				while bg and bg.Enabled do
-					task.wait(0.5)
-				end
-				payoff.Visible = true
-				refresh()
-			end)
-		end
+		-- add up the games of this match (a best-of series sends one per game)
+		local series = state.Series or { Coins = 0, Bonus = 0, Games = 0 }
+		series.Coins = series.Coins + (payload.Coins or 0)
+		series.Bonus = series.Bonus + (payload.Bonus or 0)
+		series.Games = series.Games + 1
+		series.Won = payload.Won == true
+		series.First = series.First or (payload.MatchesPlayed or 0) == 1
+		series.VsBot = payload.VsBot == true
+		state.Series = series
 	elseif payload.Kind == "Closed" then
+		local series = state.Series
+		state.Series = nil
+		if series and not state.Tutorial then
+			task.spawn(showSummary, series)
+		end
 		state.TurnEndsAt = nil
 		if state.Tutorial then
 			state.Tutorial = nil

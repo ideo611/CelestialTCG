@@ -615,6 +615,7 @@ function Instance.new(className, parent)
 	rawget(self, "__events").ChildAdded = rawget(self, "__childAdded")
 	rawget(self, "__events").Destroying = Signal.new()
 	rawget(self, "__events").DescendantAdded = Signal.new()
+	rawget(self, "__events").AncestryChanged = Signal.new()
 	for _, e in ipairs(EVENTS[className] or {}) do rawget(self, "__events")[e] = Signal.new() end
 	if className == "RemoteEvent" then
 		rawset(self, "__methods", {

@@ -18,6 +18,7 @@ for path in sorted(glob.glob(BUILD + "*.lua")):
     head = src[:300]
     KIND[base] = "Module" if "(ModuleScript)" in head else ("Local" if "(LocalScript)" in head else "Script")
 G.SRC, G.KIND = SRC, KIND
+G.DUMPSRC = open(R + "test/dumpgui.lua").read()
 
 out = lua.execute(r"""
 local results = {}
@@ -26,6 +27,7 @@ local function check(name, ok, detail)
 end
 local RS = game:GetService("ReplicatedStorage")
 local SSS = game:GetService("ServerScriptService")
+DUMP = load(DUMPSRC)(M)
 local scripts, locals = {}, {}
 for base, src in pairs(SRC) do
 	local svc, name = base:match("^(%w+)%..-(%w+)$")
@@ -192,14 +194,32 @@ local reward = lastPayload("Reward", before)
 check("first match: reward payload", reward ~= nil and reward.MatchesPlayed == 1, reward and reward.Coins)
 check("onboarding: first_match_completed", logged("first_match_completed") ~= nil)
 M.run(14)
-local payoff = guide and guide:FindFirstChild("FirstMatchPayoff", true)
-check("first match payoff panel shows", payoff and payoff.Visible)
-results.payoffText = payoff and payoff:FindFirstChild("PayoffText", true) and payoff:FindFirstChild("PayoffText", true).Text
-local openPack = guide and guide:FindFirstChild("PayoffOpenShop", true)
+local payoff = guide and guide:FindFirstChild("MatchSummary", true)
+check("match summary shows after the first match", payoff and payoff.Visible)
+results.guideDump = DUMP(guide, 1600, 900)
+results.summaryTitle = payoff and payoff:FindFirstChild("SummaryTitle").Text
+results.summaryBar = payoff and payoff:FindFirstChild("PackProgressText").Text
+results.payoffText = payoff and payoff:FindFirstChild("SummaryText", true) and payoff:FindFirstChild("SummaryText", true).Text
+local openPack = guide and guide:FindFirstChild("SummaryOpenShop", true)
 if openPack then openPack.Activated:Fire() M.run(0.5) end
 local shopGui = pg:FindFirstChild("ShopGui")
 check("payoff button opens the shop", shopGui and shopGui.Enabled)
 M.run(10)
+
+-- 4b. card inspect: the info panel explains the card
+local colGui = pg:FindFirstChild("CollectionGui")
+colGui.OpenCollection:Fire()
+M.run(1)
+local cardBtn
+for _, d in ipairs(colGui:GetDescendants()) do
+	if d.Name == "Card" and d.ClassName == "TextButton" and d.Parent.Name:sub(1, 5) == "Cell_" then cardBtn = d break end
+end
+if cardBtn then cardBtn.Activated:Fire() M.run(0.5) end
+local infoText = colGui:FindFirstChild("CardInfoText", true)
+check("collection inspect shows the card info panel", infoText ~= nil and #infoText.Text > 40, infoText and infoText.Text:sub(1, 60))
+results.inspectInfo = infoText and infoText.Text
+results.inspectDump = DUMP(colGui, 1600, 900)
+colGui.Enabled = false
 
 -- 5. first-win bonus (direct)
 data = PlayerData.Get(nik)
@@ -276,7 +296,19 @@ for line in out.values() if hasattr(out, "values") else []:
 res = [out[k] for k in sorted(k for k in out.keys() if isinstance(k, int))]
 for r in res:
     print(r)
-for k in ("dbg", "tutorialText", "tutorialText2", "payoffText", "timerText"):
+from render_gui import render
+OUTD = "/tmp/claude-0/-home-claude/3f999207-c8c9-5a40-855b-873d8eaf8301/scratchpad/all"
+def to_py(t):
+    if lupa.lua_type(t) == "table":
+        keys = list(t.keys())
+        if keys and all(isinstance(k, int) for k in keys):
+            return [to_py(t[k]) for k in sorted(keys)]
+        return {k: to_py(v) for k, v in t.items()}
+    return t
+for nm in ("inspectDump", "guideDump"):
+    if out[nm]:
+        render(to_py(out[nm]), 1600, 900, OUTD + "/" + nm + ".png")
+for k in ("summaryTitle", "summaryBar", "inspectInfo", "dbg", "tutorialText", "tutorialText2", "payoffText", "timerText"):
     if out[k]:
         print(k + ":", out[k])
 if out["tutorialTexts"]:

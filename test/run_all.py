@@ -318,6 +318,23 @@ for _, g in ipairs(pg:GetChildren()) do if g:FindFirstChild("EndTurn", true) or 
 -- mulligan: the opening hand shows; pick the first card, send it back
 local mull = battleGui and battleGui:FindFirstChild("Mulligan", true)
 check("mulligan screen shows", mull and mull.Visible)
+do
+	M.run(0.5)
+	local dg = pg:FindFirstChild("HudDockGui")
+	local ob = pg:FindFirstChild("OpenMyBinder", true)
+	local tb = pg:FindFirstChild("ToggleBinderOut", true)
+	local function shown(b)
+		local o = b
+		while o and o ~= pg do
+			if o:IsA("GuiObject") and not o.Visible then return false end
+			if o:IsA("ScreenGui") and not o.Enabled then return false end
+			o = o.Parent
+		end
+		return true
+	end
+	check("binder buttons hidden in a match", ob and tb and not shown(ob) and not shown(tb) and not ob.Visible,
+		tostring(ob and ob.Parent and ob.Parent.Name) .. " dock=" .. tostring(dg and dg.Dock.Visible) .. " battle=" .. tostring(battleGui and battleGui.Enabled))
+end
 local firstCard = mull and mull:FindFirstChild("MulliganCard_1", true)
 if firstCard then firstCard.Activated:Fire() M.run(0.3) end
 check("mulligan marks a card", mull and mull:FindFirstChild("SendBack", true) ~= nil)

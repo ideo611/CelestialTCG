@@ -908,3 +908,55 @@ if player.Character then
 	hideOwnPrompt(player.Character)
 end
 player.CharacterAdded:Connect(hideOwnPrompt)
+
+-- In a match (the battle screen is up), the binder buttons and other players'
+-- "Look through binder" prompts get out of the way (they covered the board on phones)
+do
+	local ownPrompts = {}
+	local prompts = {}
+	local function track(d)
+		if d:IsA("ProximityPrompt") and d.Name == "BinderPrompt" then
+			prompts[d] = true
+			local character = player.Character
+			if character and d:IsDescendantOf(character) then
+				ownPrompts[d] = true
+			end
+		end
+	end
+	for _, d in ipairs(workspace:GetDescendants()) do
+		track(d)
+	end
+	workspace.DescendantAdded:Connect(track)
+
+	local wasInMatch = false
+	task.spawn(function()
+		while true do
+			local battle = playerGui:FindFirstChild("BattleGui")
+			local inMatch = battle ~= nil and battle.Enabled
+			if inMatch ~= wasInMatch then
+				wasInMatch = inMatch
+				openButton.Visible = not inMatch
+				outButton.Visible = not inMatch
+				if inMatch then
+					viewersLabel.Visible = false
+				end
+				for prompt in pairs(prompts) do
+					if prompt.Parent then
+						prompt.Enabled = not inMatch and not ownPrompts[prompt]
+					else
+						prompts[prompt] = nil
+						ownPrompts[prompt] = nil
+					end
+				end
+			elseif inMatch then
+				-- (binders pulled out mid-match stay hidden too)
+				for prompt in pairs(prompts) do
+					if prompt.Parent and prompt.Enabled then
+						prompt.Enabled = false
+					end
+				end
+			end
+			task.wait(0.3)
+		end
+	end)
+end

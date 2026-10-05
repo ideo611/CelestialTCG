@@ -26,6 +26,7 @@ local RunService = game:GetService("RunService")
 local CardDatabase = require(ReplicatedStorage:WaitForChild("CardDatabase"))
 local CardArt = require(ReplicatedStorage:WaitForChild("CardArt"))
 local UiAssets = require(ReplicatedStorage:WaitForChild("UiAssets"))
+local Fonts = require(ReplicatedStorage:WaitForChild("Fonts"))
 
 local CardVisuals = {}
 
@@ -94,6 +95,7 @@ local function text(parent, name, position, size, value, maxSize, props)
 			label[key] = v
 		end
 	end
+	Fonts.Style(label)
 	make("UITextSizeConstraint", { MaxTextSize = maxSize, MinTextSize = 6 }, label)
 	return label
 end

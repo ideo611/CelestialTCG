@@ -97,6 +97,11 @@ return function(root, width, height)
 					entry.YAlign = ya and ya.Name or "Center"
 					local font = prop(child, "Font")
 					entry.Bold = not font or font.Name:find("Bold") ~= nil or font.Name:find("Black") ~= nil
+					local face = prop(child, "FontFace")
+					if face and type(face.Family) == "string" then
+						entry.Family = face.Family
+						entry.Bold = true
+					end
 					entry.TextT = prop(child, "TextTransparency") or 0
 				end
 				if cls == "ImageLabel" or cls == "ImageButton" then

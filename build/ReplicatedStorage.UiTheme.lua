@@ -25,6 +25,7 @@ local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local UiAssets = require(ReplicatedStorage:WaitForChild("UiAssets"))
+local Fonts = require(ReplicatedStorage:WaitForChild("Fonts"))
 
 local UiTheme = {}
 
@@ -114,6 +115,7 @@ function UiTheme.Button(b, options)
 	b:SetAttribute("Themed", true)
 	local plateImage = UiAssets.ButtonPlate
 	if not plateImage then
+		Fonts.Set(b, "Button")
 		-- no plate uploaded: a gradient bevel and a gold edge instead
 		make("UIGradient", {
 			Rotation = 90,
@@ -170,8 +172,9 @@ function UiTheme.Button(b, options)
 		if constraint then
 			constraint:Clone().Parent = textLabel
 		end
+		Fonts.Set(textLabel, "Button")
 		b.TextTransparency = 1
-		for _, prop in ipairs({ "Text", "TextColor3", "Font", "RichText", "TextXAlignment" }) do
+		for _, prop in ipairs({ "Text", "TextColor3", "RichText", "TextXAlignment" }) do
 			b:GetPropertyChangedSignal(prop):Connect(function()
 				textLabel[prop] = b[prop]
 			end)
@@ -395,6 +398,7 @@ function UiTheme.Title(label)
 	if not label or label:FindFirstChild("TitleGold") then
 		return label
 	end
+	Fonts.Set(label, "Title")
 	label.TextColor3 = Color3.new(1, 1, 1)
 	label.TextStrokeTransparency = 0.55
 	label.TextStrokeColor3 = Color3.fromRGB(40, 20, 0)

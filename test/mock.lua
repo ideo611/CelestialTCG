@@ -186,6 +186,7 @@ local ENUMS = {
 	EasingStyle = { "Linear", "Sine", "Back", "Quad", "Quart", "Quint", "Bounce", "Elastic", "Exponential", "Circular", "Cubic" },
 	EasingDirection = { "In", "Out", "InOut" },
 	AutomaticSize = { "None", "X", "Y", "XY" },
+	FontWeight = { "Regular", "Medium", "SemiBold", "Bold", "ExtraBold", "Heavy" },
 	ProximityPromptExclusivity = { "OnePerButton", "OneGlobally", "AlwaysShow" },
 	PartType = { "Ball", "Block", "Cylinder", "Wedge", "CornerWedge" },
 	LineJoinMode = { "Round", "Bevel", "Miter" },

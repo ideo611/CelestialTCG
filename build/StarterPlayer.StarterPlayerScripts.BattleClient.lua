@@ -126,6 +126,7 @@ local function button(parent, name, text, position, size, tint)
 		Text = text,
 	}, b)
 	make("UITextSizeConstraint", { MaxTextSize = 34, MinTextSize = 10 }, b.Label)
+	require(ReplicatedStorage:WaitForChild("Fonts")).Set(b.Label, "Button") -- (no new local: this script is at Luau's limit)
 	b.Activated:Connect(function()
 		if playClick then
 			playClick()
@@ -1904,14 +1905,14 @@ function render()
 		gameOverLabel.Visible = true
 		local won = state.Winner == seat
 		showResultBanner(won and "Victory" or "Defeat")
+		-- the Victory / Defeat art says who won; the text only adds the series score
 		if not series or series.BestOf == 1 then
-			gameOverLabel.Text = won and "You win!" or "You lose"
+			gameOverLabel.Text = ""
+			gameOverLabel.Visible = false
 		elseif seriesOver then
-			gameOverLabel.Text = (won and "You win the series %d - %d!" or "You lose the series %d - %d")
-				:format(myWins, theirWins)
+			gameOverLabel.Text = ("Series %d - %d"):format(myWins, theirWins)
 		else
-			gameOverLabel.Text = ("%s game %d\nSeries: you %d - %d them\nNext game starting..."):format(
-				won and "You win" or "You lose", series.Game, myWins, theirWins)
+			gameOverLabel.Text = ("Series %d - %d\nNext game starting..."):format(myWins, theirWins)
 		end
 	else
 		gameOverLabel.Visible = false

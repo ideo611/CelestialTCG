@@ -28,7 +28,24 @@ def load(path):
     return _cache[path]
 
 
-def font(size, bold):
+HERE = os.path.dirname(os.path.abspath(__file__))
+FAMILY_FILES = {"12187360881": "Audiowide-Regular.ttf", "12187375422": "Rajdhani-Bold.ttf",
+                "Sarpanch": "Sarpanch-Bold.ttf", "Michroma": "Michroma-Regular.ttf"}
+
+
+def family_font(family, size):
+    for key, file in FAMILY_FILES.items():
+        if family and key in family:
+            path = os.path.join(HERE, "fonts", file)
+            if os.path.exists(path):
+                return ImageFont.truetype(path, max(6, int(size)))
+    return None
+
+
+def font(size, bold, family=None):
+    ff = family_font(family, size)
+    if ff:
+        return ff
     names = ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else
              "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"]
     for n in names:
@@ -37,16 +54,16 @@ def font(size, bold):
     return ImageFont.load_default()
 
 
-def fit_text(draw, text, w, h, max_size, bold, scaled):
+def fit_text(draw, text, w, h, max_size, bold, scaled, family=None):
     size = int(max_size)
     while size > 6:
-        f = font(size, bold)
+        f = font(size, bold, family)
         lines = wrap(draw, text, f, w)
         lh = size * 1.15
         if not scaled or (len(lines) * lh <= h and all(draw.textlength(l, font=f) <= w for l in lines)):
             return f, lines, lh
         size -= 1
-    f = font(6, bold)
+    f = font(6, bold, family)
     return f, wrap(draw, text, f, w), 7
 
 
@@ -141,7 +158,7 @@ def render(entries, width, height, path, bg=(0, 0, 0)):
             sa = int(255 * (1 - e["StrokeT"]))
             d.rounded_rectangle(box, radius=r, outline=tuple(e["Stroke"]) + (sa,), width=max(1, int(e["StrokeW"])))
         if e.get("Text"):
-            f, lines, lh = fit_text(d, e["Text"], w, h, e["MaxText"], e["Bold"], e["Scaled"])
+            f, lines, lh = fit_text(d, e["Text"], w, h, e["MaxText"], e["Bold"], e["Scaled"], e.get("Family"))
             total = len(lines) * lh
             ty = y + (h - total) / 2 if e["YAlign"] == "Center" else (y if e["YAlign"] == "Top" else y + h - total)
             ta = int(255 * (1 - e.get("TextT", 0)))

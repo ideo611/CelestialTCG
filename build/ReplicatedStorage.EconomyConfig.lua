@@ -55,9 +55,9 @@ EconomyConfig.MatchRewards = {
 -- pack limit, and never expire. A Booster Box is kept sealed until opened.
 ---------------------------------------------------------------------
 EconomyConfig.Products = {
-	Ticket1 = { ProductId = 0, Robux = 49, Tickets = 1, Name = "1 Booster Pack Ticket" },
-	Ticket5 = { ProductId = 0, Robux = 199, Tickets = 5, Name = "5 Booster Pack Tickets" },
-	BoosterBox = { ProductId = 0, Robux = 449, Boxes = 1, Name = "Booster Box" },
+	Ticket1 = { ProductId = 3716569130, Robux = 49, Tickets = 1, Name = "1 Booster Pack Ticket" },
+	Ticket5 = { ProductId = 3716569254, Robux = 199, Tickets = 5, Name = "5 Booster Pack Tickets" },
+	BoosterBox = { ProductId = 3716569336, Robux = 449, Boxes = 1, Name = "Booster Box" },
 }
 EconomyConfig.ProductOrder = { "Ticket1", "Ticket5", "BoosterBox" }
 

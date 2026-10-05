@@ -547,16 +547,16 @@ CardVisuals.MythicAura = "None"
 -- What each finish adds (numbers are see-through amounts: lower = stronger)
 local FINISH_FX = {
 	-- Holo: a classic holo art box (rainbow foil sliding across the art, plus a glare)
-	Holo = { ArtFoil = 0.5, Glare = 0.2 },
+	Holo = { ArtFoil = 0.5, Glare = 0.06 },
 	-- Textured: embossed swirls etched across the card, catching the rainbow,
 	-- and a rainbow shimmer running around the frame
-	Textured = { ArtFoil = 0.68, CardFoil = 0.82, Glare = 0.25, Pattern = "Etched", PatternStrength = 0.62,
+	Textured = { ArtFoil = 0.68, CardFoil = 0.82, Glare = 0.1, Pattern = "Etched", PatternStrength = 0.5,
 		PatternTile = 0.5, FrameShine = "Rainbow" },
 	-- 3D: lifted off the table (shadow, gentle bob), deep parallax, gold shimmer on the frame
-	["3D"] = { ArtFoil = 0.6, Glare = 0.25, Float = true, Lift = true, FrameShine = "Gold" },
+	["3D"] = { ArtFoil = 0.6, Glare = 0.1, Float = true, Lift = true, FrameShine = "Gold" },
 	-- Mythic: the galaxy foil over the whole card (UiAssets.Holo.Galaxy), colors
 	-- cycling, a rainbow frame shimmer and glints popping up
-	Mythic = { ArtFoil = 0.68, CardFoil = 0.74, Glare = 0.2, FrameShine = "Rainbow", CycleColors = true, Aura = true },
+	Mythic = { ArtFoil = 0.68, CardFoil = 0.74, Glare = 0.08, FrameShine = "Rainbow", CycleColors = true, Aura = true },
 }
 
 -- The foil is a rainbow that repeats exactly every FOIL_PERIOD. It slides by
@@ -614,7 +614,7 @@ end
 local animated = {} -- [object] = { Kind, Phase, Added, ... }
 local lastSweep = 0
 local loopRunning = false
-local GLARE_CYCLE, GLARE_SWEEP = 4.2, 3.4 -- seconds per glare, seconds it takes to cross (slow, so the light reads the etchings)
+local GLARE_CYCLE, GLARE_SWEEP = 3.4, 2.8 -- seconds per glare, seconds it takes to cross (slow, so the light reads the etchings)
 
 local function glareOffset(t, phase)
 	local u = ((t + phase) % GLARE_CYCLE) / GLARE_SWEEP
@@ -779,7 +779,10 @@ CardVisuals.InnerRect = { 0.108, 0.146, 0.786, 0.712 }
 -- sideways over holder. w, h = holder's size as fractions of the card face.
 -- lit = an etched pattern (the white line art): it stays still, faintly visible,
 -- and a rainbow light sweeps across it in time with the glare, lighting the lines up.
-CardVisuals.EtchBase = 0.74 -- how faint an etching is away from the light (1 = invisible)
+CardVisuals.EtchBase = 0.6 -- how faint an etching is away from the light (1 = invisible)
+-- a still rainbow tint over foil art (even without the sliding foil), so a foil
+-- card looks foil at a glance: added to the finish's ArtFoil transparency
+CardVisuals.StaticFoilFade = 0.3
 -- false = no rainbow foil sliding across the card: the glare lighting up the
 -- etched patterns carries the shine instead
 CardVisuals.MovingFoil = false
@@ -810,13 +813,14 @@ local function foilTexture(holder, image, w, h, transparency, phase, zIndex, spe
 			Name = "EtchLight",
 			Color = lit == "white" and ColorSequence.new(Color3.fromRGB(255, 255, 255)) or FOIL,
 			Rotation = 25,
+			-- (a wide band, so the light catches lots of lines at once)
 			Transparency = NumberSequence.new({
 				NumberSequenceKeypoint.new(0, base),
-				NumberSequenceKeypoint.new(0.3, base),
-				NumberSequenceKeypoint.new(0.44, 0.12),
+				NumberSequenceKeypoint.new(0.22, base),
+				NumberSequenceKeypoint.new(0.4, 0.1),
 				NumberSequenceKeypoint.new(0.5, 0),
-				NumberSequenceKeypoint.new(0.56, 0.12),
-				NumberSequenceKeypoint.new(0.7, base),
+				NumberSequenceKeypoint.new(0.6, 0.1),
+				NumberSequenceKeypoint.new(0.78, base),
 				NumberSequenceKeypoint.new(1, base),
 			}),
 		}, sheen)
@@ -901,7 +905,8 @@ local function addFinish(face, artHolder, finish, frameImage, inner, corner, car
 			artFoil.Transparency = foilTransparency(math.min(0.92, fx.ArtFoil + 0.25))
 		end
 	else
-		artFoil.Transparency = NumberSequence.new(1)
+		-- held still: a gentle rainbow sheen over the art
+		artFoil.Transparency = foilTransparency(math.min(0.95, fx.ArtFoil + CardVisuals.StaticFoilFade))
 	end
 	-- the uploaded glare streak replaces the drawn one
 	local glareImage = holoImage("Glare")
@@ -914,7 +919,7 @@ local function addFinish(face, artHolder, finish, frameImage, inner, corner, car
 			Size = UDim2.fromScale(1.2, 1.2),
 			BackgroundTransparency = 1,
 			Image = glareImage,
-			ImageTransparency = math.min(0.9, fx.Glare + 0.15),
+			ImageTransparency = math.min(0.9, fx.Glare + 0.05),
 			ScaleType = Enum.ScaleType.Stretch,
 			ZIndex = 1,
 		}, artHolder)

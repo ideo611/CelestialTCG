@@ -310,6 +310,25 @@ for _, e in ipairs(M.remoteLog) do
 	end
 end
 check("mulligan sent back one card", sawMull)
+-- picking a hand card on your turn shows it big over the log
+do
+	local shown = false
+	for _ = 1, 2 do
+		local hc = battleGui and battleGui:FindFirstChild("HandCard_1", true)
+		if hc then hc.Activated:Fire() M.run(0.3) end
+		local pick = battleGui and battleGui:FindFirstChild("PickPreview", true)
+		if pick and pick.Visible then
+			shown = true
+			results.battlePhonePick = dump(battleGui, 844, 390)
+			hc.Activated:Fire() M.run(0.3)
+			check("unpicking hides it again", not pick.Visible)
+			break
+		end
+		actions:FireServer({ Kind = "EndTurn" })
+		M.run(6)
+	end
+	check("picking a hand card shows it big", shown)
+end
 for i = 1, 4 do
 	actions:FireServer({ Kind = "EndTurn" })
 	M.run(6)
@@ -480,7 +499,7 @@ print("singles:", res.get("singlesPrices"))
 print("events seen:", res.get("eventKinds"))
 for name, size in [("mulligan", (1600, 900)), ("graveyard", (1600, 900)), ("deckEditor", (1600, 900)), ("deckEditor2", (1600, 900)), ("starterWelcome", (1600, 900)), ("starterNebula", (1600, 900)), ("shopPacks", (1600, 900)),
                    ("shopPicker", (1600, 900)), ("shopReveal", (1600, 900)), ("shopSingles", (1600, 900)),
-                   ("binder", (1600, 900)), ("binder2", (1600, 900)), ("battle", (1600, 900)), ("battle2", (1600, 900)), ("battlePhone", (844, 390)), ("deckEditorPhone", (1169, 540)), ("shopPhone", (1169, 540)), ("tv", (540, 300)), ("tvLive", (420, 240))]:
+                   ("binder", (1600, 900)), ("binder2", (1600, 900)), ("battle", (1600, 900)), ("battle2", (1600, 900)), ("battlePhone", (844, 390)), ("battlePhonePick", (844, 390)), ("deckEditorPhone", (1169, 540)), ("shopPhone", (1169, 540)), ("tv", (540, 300)), ("tvLive", (420, 240))]:
     if res.get(name):
         render(res[name], size[0], size[1], f"{OUT}/{name}.png")
 import json

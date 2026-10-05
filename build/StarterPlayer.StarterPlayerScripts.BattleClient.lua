@@ -472,18 +472,52 @@ local logFrame = make("Frame", {
 }, root)
 UiAssets.FramePanel(logFrame)
 make("UICorner", { CornerRadius = UDim.new(0, 8) }, logFrame)
-local logLabel = label(logFrame, {
+-- (a box the log can't spill out of: the newest lines sit at the bottom and
+-- older ones scroll off the top)
+local logLabel = label(make("Frame", {
+	Name = "LogClip",
+	Position = UDim2.fromScale(0.05, 0.03),
+	Size = UDim2.fromScale(0.9, 0.82),
+	BackgroundTransparency = 1,
+	ClipsDescendants = true,
+}, logFrame), {
 	Name = "LogText",
-	Position = UDim2.fromScale(0.05, 0.02),
-	Size = UDim2.fromScale(0.9, 0.96),
+	Size = UDim2.fromScale(1, 1),
 	TextScaled = false,
 	TextSize = 14,
 	TextWrapped = true,
 	Font = Enum.Font.Gotham,
 	TextXAlignment = Enum.TextXAlignment.Left,
-	TextYAlignment = Enum.TextYAlignment.Top,
+	TextYAlignment = Enum.TextYAlignment.Bottom,
 	Text = "",
 })
+-- smaller text on short (phone) screens
+do
+	local function fitLogText()
+		local camera = workspace.CurrentCamera
+		local h = camera and camera.ViewportSize.Y or 900
+		logLabel.TextSize = h > 0 and math.clamp(math.floor(h / 64), 10, 14) or 14
+	end
+	fitLogText()
+	if workspace.CurrentCamera then
+		workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fitLogText)
+	end
+end
+
+-- The card you picked from your hand, shown big over the log (so you can read
+-- it before choosing where it goes; on a phone the hand cards are small)
+local PICK = { CardId = nil } -- (one table: this script is near Luau's 200-local limit)
+PICK.Frame = make("Frame", {
+	Name = "PickPreview",
+	Position = UDim2.fromScale(0.76, 0.065),
+	Size = UDim2.fromScale(0.225, 0.43),
+	BackgroundColor3 = PANEL,
+	BackgroundTransparency = 0,
+	BorderSizePixel = 0,
+	Visible = false,
+	ZIndex = 3,
+}, root)
+make("UICorner", { CornerRadius = UDim.new(0, 8) }, PICK.Frame)
 
 local inspectButton = button(root, "InspectButton", "Inspect", UDim2.fromScale(0.76, 0.505), UDim2.fromScale(0.225, 0.055),
 	TINT.Inspect)
@@ -1824,6 +1858,26 @@ function render()
 		end)
 	end
 
+	-- the picked hand card, big
+	local pickId = selected and selected.Kind == "Hand" and selected.CardId or nil
+	if pickId ~= PICK.CardId then
+		PICK.CardId = pickId
+		clear(PICK.Frame)
+		if pickId then
+			local holder = make("Frame", {
+				Name = "PickCard",
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromScale(0.94, 0.94),
+				BackgroundTransparency = 1,
+				ZIndex = 3,
+			}, PICK.Frame)
+			make("UIAspectRatioConstraint", { AspectRatio = CARD_ASPECT }, holder)
+			CardVisuals.Draw(holder, pickId, { Finish = finishFor("Self", pickId) })
+		end
+	end
+	PICK.Frame.Visible = pickId ~= nil
+
 	-- Game over banner
 	-- Series score. Right when a game ends the server may not have counted
 	-- it yet, so count it here if needed.
@@ -2149,7 +2203,9 @@ local RED = Color3.fromRGB(255, 80, 80)
 local GREEN = Color3.fromRGB(110, 235, 120)
 local BLUE = Color3.fromRGB(120, 190, 255)
 local GOLD = Color3.fromRGB(255, 210, 90)
-local ORANGE = Color3.fromRGB(255, 150, 50)
+-- (more colors live in a table: this script is near Luau's 200-local limit)
+local FX_COLORS = { Purple = Color3.fromRGB(190, 120, 255), Teal = Color3.fromRGB(90, 230, 220),
+	Orange = Color3.fromRGB(255, 150, 50) }
 
 -- One event's animation. Returns after the part that should finish before the next event.
 -- (playEvent is declared above, before the Anomaly slots)
@@ -2461,7 +2517,7 @@ function playEvent.Ignite(e)
 		else
 			playEvent._fx(slot, "Ignite", 1.3)
 		end
-		flash(slot, ORANGE, 0.7)
+		flash(slot, FX_COLORS.Orange, 0.7)
 	end
 	pause(0.1)
 end
@@ -2527,8 +2583,6 @@ local function removeFromSlot(slot, color, text)
 	slot.Rotation = 0
 end
 
-local PURPLE = Color3.fromRGB(190, 120, 255)
-local TEAL = Color3.fromRGB(90, 230, 220)
 
 function playEvent.UnitGrew(e)
 	local slot = uidSlot[e.Uid]
@@ -2556,7 +2610,7 @@ function playEvent.Decay(e)
 	local slot = uidSlot[e.Target]
 	if slot then
 		playSound("Decay")
-		flash(slot, PURPLE, 0.7)
+		flash(slot, FX_COLORS.Purple, 0.7)
 		playEvent._fx(slot, "Decay", 1.2)
 	end
 	pause(0.1)
@@ -2566,9 +2620,9 @@ function playEvent.UnitWeakened(e)
 	local slot = uidSlot[e.Uid]
 	if slot then
 		playSound("Weaken")
-		flash(slot, PURPLE, 0.55)
+		flash(slot, FX_COLORS.Purple, 0.55)
 		playEvent._fx(slot, "Weaken", 1.2)
-		popText(slot, "-" .. e.Amount .. " Power", PURPLE)
+		popText(slot, "-" .. e.Amount .. " Power", FX_COLORS.Purple)
 		setShownStats(slot, e.Power, nil, nil)
 	end
 	pause(0.15)
@@ -2578,9 +2632,9 @@ function playEvent.StreakGained(e)
 	local slot = uidSlot[e.Uid]
 	if slot then
 		playSound("Streak")
-		flash(slot, TEAL, 0.5)
+		flash(slot, FX_COLORS.Teal, 0.5)
 		playEvent._fx(slot, "Streak", 1.3)
-		popText(slot, "Streak!", TEAL)
+		popText(slot, "Streak!", FX_COLORS.Teal)
 	end
 	pause(0.12)
 end
@@ -2589,7 +2643,7 @@ function playEvent.UnitReturned(e)
 	local slot = uidSlot[e.Uid]
 	if slot then
 		playSound("SpellCast", 1.2)
-		removeFromSlot(slot, TEAL)
+		removeFromSlot(slot, FX_COLORS.Teal)
 		uidSlot[e.Uid] = nil
 	end
 	pause(0.15)
@@ -2599,8 +2653,8 @@ function playEvent.CommanderPaidHP(e)
 	local side = sideOfSeat(e.Player)
 	local target = commanderSlots[side]
 	playSound("Hit", 0.8)
-	flash(target, PURPLE, 0.6)
-	popText(target, "-" .. e.Amount .. " HP", PURPLE, true)
+	flash(target, FX_COLORS.Purple, 0.6)
+	popText(target, "-" .. e.Amount .. " HP", FX_COLORS.Purple, true)
 	setShownCommanderHP(side, e.HP, true)
 	pause(0.2)
 end

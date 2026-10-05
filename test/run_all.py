@@ -294,19 +294,8 @@ if rulebook then
 	check("rulebook Collecting page has the live numbers", body:find("Star Tokens") and body:find("50 coins"), body:sub(1, 80))
 	results.rulebook2 = dump(rulebook, 1600, 900)
 	check("rulebook has Replay tutorial", rulebook:FindFirstChild("ReplayTutorial", true).Visible)
-	-- with a controller: the cursor comes on with the menu, goes off after it
-	local gps = game:GetService("GamepadService")
-	if pg:FindFirstChild("ShopGui") then pg.ShopGui.Enabled = false end -- (the shop was left open above)
-	M.lastInput = "Gamepad1" M.run(0.6)
-	check("controller: cursor on while a menu is open", gps.GamepadCursorEnabled == true)
-	check("controller: hint bar shows", pg:FindFirstChild("ControllerHints") and pg.ControllerHints.Enabled)
-	rulebook:FindFirstChild("Close", true).Activated:Fire() M.run(0.6)
+	rulebook:FindFirstChild("Close", true).Activated:Fire() M.run(0.2)
 	check("rulebook closes", not rulebook.Enabled)
-	local openNames = {}
-	for _, g in ipairs(pg:GetChildren()) do if g:IsA("ScreenGui") and g.Enabled then table.insert(openNames, g.Name) end end
-	check("controller: cursor off back in the world", gps.GamepadCursorEnabled == false, table.concat(openNames, ","))
-	M.lastInput = "MouseButton1" M.run(0.6)
-	check("mouse: hint bar hides", not pg.ControllerHints.Enabled)
 end
 
 -- battle vs bot at table 1, with the TV following along

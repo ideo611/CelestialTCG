@@ -127,8 +127,13 @@ results.tutorialText = guide and guide:FindFirstChild("TutorialText", true) and 
 local nextB = guide and guide:FindFirstChild("TutorialNext", true)
 if nextB and nextB.Visible then nextB.Activated:Fire() M.run(0.3) end
 results.tutorialText2 = guide and guide:FindFirstChild("TutorialText", true).Text
-check("step 2 highlights the hand", guide and battleGui:FindFirstChild("Hand", true)
-	and battleGui:FindFirstChild("Hand", true):FindFirstChild("TutorialGlow") ~= nil)
+local handGlow
+for _, d in ipairs(guide:GetDescendants()) do
+	if d.Name == "TutorialGlow" and d:GetAttribute("Target") == "Hand" then handGlow = d end
+end
+check("step 2 highlights the hand", handGlow ~= nil)
+check("the glow doesn't sit inside the hand (it would push the cards aside)",
+	battleGui:FindFirstChild("Hand", true):FindFirstChild("TutorialGlow") == nil)
 -- play through: each turn play what we can, use the ability, summon, end turn
 local actions = RS.BattleRemotes.BattleAction
 local texts = {}

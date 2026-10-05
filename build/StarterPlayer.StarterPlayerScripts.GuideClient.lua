@@ -301,25 +301,24 @@ local function clearGlows()
 	glows = {}
 end
 
+-- Glows are drawn on the guide's own screen, over the battle screen, and
+-- follow their target every frame. (Putting them inside the battle screen's
+-- frames broke layouts: inside the hand, the glow counted as a "card" and
+-- pushed the real cards off to the right.)
+local glowLayer -- (made below, with the spotlight)
 local function glow(names)
 	clearGlows()
-	local bg = battleGui()
-	if not bg then
-		return
-	end
 	for _, name in ipairs(names or {}) do
-		local target = bg:FindFirstChild(name, true)
-		if target then
-			local frame = make("Frame", {
-				Name = "TutorialGlow",
-				Size = UDim2.fromScale(1, 1),
-				BackgroundTransparency = 1,
-				ZIndex = 30,
-			}, target)
-			make("UIStroke", { Name = "GlowStroke", Color = GOLD, Thickness = 5, Transparency = 0 }, frame)
-			make("UICorner", { CornerRadius = UDim.new(0, 8) }, frame)
-			table.insert(glows, frame)
-		end
+		local frame = make("Frame", {
+			Name = "TutorialGlow",
+			BackgroundTransparency = 1,
+			Visible = false,
+			ZIndex = 16,
+		}, glowLayer)
+		frame:SetAttribute("Target", name)
+		make("UIStroke", { Name = "GlowStroke", Color = GOLD, Thickness = 5, Transparency = 0 }, frame)
+		make("UICorner", { CornerRadius = UDim.new(0, 8) }, frame)
+		table.insert(glows, frame)
 	end
 end
 
@@ -333,6 +332,7 @@ local spotlightRoot = make("Frame", {
 	Size = UDim2.fromScale(1, 1),
 	BackgroundTransparency = 1,
 }, gui)
+glowLayer = spotlightRoot
 local shades = {}
 for i = 1, 4 do
 	shades[i] = make("Frame", {
@@ -391,10 +391,59 @@ local function updateSpotlight()
 	end
 end
 
+-- Where a glow's target is on screen (a row like the hand: around its cards)
+local function targetRect(target)
+	local function rectOf(object)
+		local ok, pos, size = pcall(function()
+			return object.AbsolutePosition, object.AbsoluteSize
+		end)
+		if ok and pos and size and size.X > 0 and size.Y > 0 then
+			return pos.X, pos.Y, pos.X + size.X, pos.Y + size.Y
+		end
+		return nil
+	end
+	if target:FindFirstChildOfClass("UIListLayout") or target:FindFirstChildOfClass("UIGridLayout") then
+		local x0, y0, x1, y1 = math.huge, math.huge, -math.huge, -math.huge
+		for _, child in ipairs(target:GetChildren()) do
+			if child:IsA("GuiObject") and child.Visible then
+				local a, b, c, d = rectOf(child)
+				if a then
+					x0, y0, x1, y1 = math.min(x0, a), math.min(y0, b), math.max(x1, c), math.max(y1, d)
+				end
+			end
+		end
+		if x0 ~= math.huge then
+			return x0, y0, x1, y1
+		end
+	end
+	return rectOf(target)
+end
+
+local function updateGlows()
+	local bg = battleGui()
+	local origin = spotlightRoot.AbsolutePosition
+	for _, g in ipairs(glows) do
+		local target = bg and bg.Enabled and bg:FindFirstChild(g:GetAttribute("Target"), true)
+		local x0, y0, x1, y1
+		if target and target:IsA("GuiObject") and target.Visible then
+			x0, y0, x1, y1 = targetRect(target)
+		end
+		if x0 then
+			local pad = 4
+			g.Position = UDim2.fromOffset(x0 - origin.X - pad, y0 - origin.Y - pad)
+			g.Size = UDim2.fromOffset(x1 - x0 + pad * 2, y1 - y0 + pad * 2)
+			g.Visible = true
+		else
+			g.Visible = false
+		end
+	end
+end
+
 -- Pulse the glows
 RunService.Heartbeat:Connect(function()
 	local t = os.clock()
 	updateSpotlight()
+	updateGlows()
 	for _, g in ipairs(glows) do
 		local stroke = g:FindFirstChild("GlowStroke")
 		if stroke then

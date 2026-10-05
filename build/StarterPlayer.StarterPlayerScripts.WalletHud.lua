@@ -238,6 +238,7 @@ local buttons = {
 	{ "DevStarter", "Claim both starters" },
 	{ "DevOdds", "Print odds to Output" },
 	{ "DevTickets", "+5 tickets, +1 box" },
+	{ "DevReset", "Reset my progress" },
 }
 local made = {}
 for i, info in ipairs(buttons) do
@@ -350,6 +351,23 @@ end)
 made.DevTickets.Activated:Connect(function()
 	local ok, result = ask("DevGrantTickets")
 	messageLabel.Text = ok and "+5 pack tickets and a sealed Booster Box" or result
+end)
+
+-- tap twice (within 4 seconds) to wipe this account's save and start over as a new player
+local resetArmedAt = 0
+made.DevReset.Activated:Connect(function()
+	if os.clock() - resetArmedAt > 4 then
+		resetArmedAt = os.clock()
+		made.DevReset.Text = "Tap again to wipe!"
+		messageLabel.Text = "This wipes your cards, coins, decks and tutorial progress (Robux purchase records are kept)."
+		task.delay(4, function()
+			made.DevReset.Text = "Reset my progress"
+		end)
+		return
+	end
+	resetArmedAt = 0
+	local ok, result = ask("DevResetProgress")
+	messageLabel.Text = ok and "Progress reset. Stop and press Play again." or result
 end)
 
 made.DevCoins.Activated:Connect(function()

@@ -173,6 +173,20 @@ function studioHandlers.DevGrantAllFinishes(player)
 	return PlayerData.DevGrantAllFinishes(player)
 end
 
+-- wipes this account's save back to a brand-new player's (to test onboarding),
+-- then sends them out so every screen starts fresh on the next Play
+function studioHandlers.DevResetProgress(player)
+	local ok = PlayerData.DevReset(player)
+	if ok then
+		task.delay(1, function()
+			if player.Parent then
+				player:Kick("Progress reset. Press Play again to start as a new player.")
+			end
+		end)
+	end
+	return ok, ok and "reset" or "Couldn't save the reset. Try again."
+end
+
 function studioHandlers.DevGrantStarter(player, args)
 	return PlayerData.GrantStarter(player, args.Deck)
 end

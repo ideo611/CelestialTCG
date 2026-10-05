@@ -339,6 +339,16 @@ check("invite window shows progress", inviteGui and inviteGui:FindFirstChild("In
 	inviteGui and inviteGui:FindFirstChild("InviteStatus", true).Text)
 SHOTS.invite = DUMP(inviteGui, 1600, 900)
 
+-- testing reset (Studio): back to a new player's save, purchase records kept
+local finnData = PlayerData.Get(finn)
+table.insert(finnData.Purchases, { Id = "test-receipt", Product = "Ticket1", Time = os.time() })
+finnData.Onboarding.TutorialDone = true
+check("dev reset saves", PlayerData.DevReset(finn) == true)
+local fresh = PlayerData.Get(finn)
+check("dev reset: a new player's save", fresh.Tickets == 0 and not fresh.Onboarding.TutorialDone and next(fresh.OwnedStarters) == nil
+	and fresh.Coins == EconomyConfig.StartingCoins)
+check("dev reset keeps purchase records", PlayerData.HasPurchase(fresh, "test-receipt"))
+
 check("no script errors", #M.errors == 0, M.errors[1])
 return results
 """)

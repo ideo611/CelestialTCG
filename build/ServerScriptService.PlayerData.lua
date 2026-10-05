@@ -1224,6 +1224,26 @@ function PlayerData.DeckFinishes(data, deck)
 end
 
 -- Studio testing only: 5 tickets and a sealed box (no Robux involved)
+-- Testing (Studio only): back to a brand-new player's save. Robux purchase
+-- records and collected invite tickets are kept, so nothing paid is granted twice.
+function PlayerData.DevReset(player)
+	local profile = profiles[player]
+	if not profile then
+		return false
+	end
+	local old = profile.Data
+	local fresh = defaultData()
+	fresh.Purchases = old.Purchases or {}
+	fresh.ReferralClaimed = old.ReferralClaimed or 0
+	profile.Data = fresh
+	profile.New = true
+	changed(player)
+	if profile.Temporary then
+		return true
+	end
+	return PlayerData.Save(player)
+end
+
 function PlayerData.DevGrantTickets(player)
 	local data = PlayerData.Get(player)
 	if not data then

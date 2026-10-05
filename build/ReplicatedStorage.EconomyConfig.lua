@@ -58,9 +58,9 @@ EconomyConfig.Products = {
 	-- Robux = the price set on the Creator Dashboard (what Roblox actually charges;
 	-- the shop reads the live price from Roblox and only falls back to this).
 	-- ~80 Robux = $1 in the smallest Robux bundle.
-	Ticket1 = { ProductId = 3716569130, Robux = 80, Tickets = 1, Name = "1 Booster Pack Ticket" },     -- ~$1
-	Ticket5 = { ProductId = 3716569254, Robux = 320, Tickets = 5, Name = "5 Booster Pack Tickets" },   -- ~$4 (20% off)
-	BoosterBox = { ProductId = 3716569336, Robux = 720, Boxes = 1, Name = "Booster Box" },            -- ~$9 (12 packs + topper)
+	Ticket1 = { ProductId = 3716569130, Robux = 160, Tickets = 1, Name = "1 Booster Pack Ticket" },    -- ~$2
+	Ticket5 = { ProductId = 3716569254, Robux = 640, Tickets = 5, Name = "5 Booster Pack Tickets" },   -- ~$8 (20% off)
+	BoosterBox = { ProductId = 3716569336, Robux = 1440, Boxes = 1, Name = "Booster Box" },           -- ~$18 (12 packs + topper, 25% off)
 }
 EconomyConfig.ProductOrder = { "Ticket1", "Ticket5", "BoosterBox" }
 

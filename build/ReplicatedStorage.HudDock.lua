@@ -34,6 +34,7 @@ local COVERING = {
 	StarterBrowserGui = true,
 	SpectateGui = true,
 	SpectateInspectGui = true,
+	RulebookGui = true,
 }
 
 local gui, dock, scale

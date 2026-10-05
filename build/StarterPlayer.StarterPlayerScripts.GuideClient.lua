@@ -617,11 +617,15 @@ end)
 playFirstButton.Activated:Connect(startPractice)
 playButton.Activated:Connect(startPractice)
 howButton.Activated:Connect(function()
-	pcall(function() ReplicatedStorage.AnalyticsRemotes.Track:FireServer("rulebook_opened", "replay_tutorial") end)
-	local ok, message = ask("StartTutorial")
-	if not ok then
-		flashHud(message)
-	end
+	-- the rulebook; its "Replay tutorial" button starts the tutorial again
+	pcall(function() ReplicatedStorage.AnalyticsRemotes.Track:FireServer("rulebook_opened", "hud") end)
+	require(ReplicatedStorage:WaitForChild("Rulebook")).Open(function()
+		pcall(function() ReplicatedStorage.AnalyticsRemotes.Track:FireServer("rulebook_opened", "replay_tutorial") end)
+		local ok, message = ask("StartTutorial")
+		if not ok then
+			flashHud(message)
+		end
+	end)
 end)
 payoffShop.Activated:Connect(function()
 	payoff.Visible = false

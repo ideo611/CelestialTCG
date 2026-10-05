@@ -276,6 +276,28 @@ if cancelDeck then cancelDeck.Activated:Fire() M.run(0.5) end
 local closeCol = colGui and colGui:FindFirstChild("CloseCollection", true)
 if closeCol then closeCol.Activated:Fire() M.run(0.5) end
 
+-- the rulebook (How to play)
+local howB = pg:FindFirstChild("HowToPlay", true)
+if howB then howB.Activated:Fire() M.run(0.5) end
+local rulebook = pg:FindFirstChild("RulebookGui")
+check("How to play opens the rulebook", rulebook and rulebook.Enabled)
+local dockGui = pg:FindFirstChild("HudDockGui")
+M.run(0.5)
+check("HUD column hides under the rulebook", dockGui and dockGui:FindFirstChild("Dock") and not dockGui.Dock.Visible)
+if rulebook then
+	results.rulebook = dump(rulebook, 1600, 900)
+	results.rulebookPhone = dump(rulebook, 844, 390)
+	rulebook:FindFirstChild("Next", true).Activated:Fire() M.run(0.2)
+	check("rulebook Next turns the page", rulebook:FindFirstChild("PageTitle", true).Text == "Your deck", rulebook:FindFirstChild("PageTitle", true).Text)
+	rulebook:FindFirstChild("Tab9", true).Activated:Fire() M.run(0.2)
+	local body = rulebook:FindFirstChild("Body", true).Text
+	check("rulebook Collecting page has the live numbers", body:find("Star Tokens") and body:find("50 coins"), body:sub(1, 80))
+	results.rulebook2 = dump(rulebook, 1600, 900)
+	check("rulebook has Replay tutorial", rulebook:FindFirstChild("ReplayTutorial", true).Visible)
+	rulebook:FindFirstChild("Close", true).Activated:Fire() M.run(0.2)
+	check("rulebook closes", not rulebook.Enabled)
+end
+
 -- battle vs bot at table 1, with the TV following along
 local tvs = workspace:FindFirstChild("SpectateTVs")
 check("4 TVs over the tables", tvs and #tvs:GetChildren() == 4)
@@ -499,7 +521,7 @@ print("singles:", res.get("singlesPrices"))
 print("events seen:", res.get("eventKinds"))
 for name, size in [("mulligan", (1600, 900)), ("graveyard", (1600, 900)), ("deckEditor", (1600, 900)), ("deckEditor2", (1600, 900)), ("starterWelcome", (1600, 900)), ("starterNebula", (1600, 900)), ("shopPacks", (1600, 900)),
                    ("shopPicker", (1600, 900)), ("shopReveal", (1600, 900)), ("shopSingles", (1600, 900)),
-                   ("binder", (1600, 900)), ("binder2", (1600, 900)), ("battle", (1600, 900)), ("battle2", (1600, 900)), ("battlePhone", (844, 390)), ("battlePhonePick", (844, 390)), ("deckEditorPhone", (1169, 540)), ("shopPhone", (1169, 540)), ("tv", (540, 300)), ("tvLive", (420, 240))]:
+                   ("binder", (1600, 900)), ("binder2", (1600, 900)), ("battle", (1600, 900)), ("battle2", (1600, 900)), ("battlePhone", (844, 390)), ("battlePhonePick", (844, 390)), ("deckEditorPhone", (1169, 540)), ("shopPhone", (1169, 540)), ("rulebook", (1600, 900)), ("rulebook2", (1600, 900)), ("rulebookPhone", (844, 390)), ("tv", (540, 300)), ("tvLive", (420, 240))]:
     if res.get(name):
         render(res[name], size[0], size[1], f"{OUT}/{name}.png")
 import json

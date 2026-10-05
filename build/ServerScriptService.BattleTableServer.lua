@@ -298,6 +298,9 @@ local function createTable(index, position, parent, options)
 	end
 
 	local function seatNames()
+		if match.Replay and match.Replay.Names then
+			return { match.Replay.Names[1], match.Replay.Names[2] }
+		end
 		local names = {}
 		for seat = 1, 2 do
 			local occupant = match.Seats[seat]
@@ -408,6 +411,7 @@ local function createTable(index, position, parent, options)
 		match.Battle = nil
 		match.Over = false
 		match.TurnEndsAt = nil
+		match.Replay = nil
 		refreshTable()
 		if virtual then
 			if options.OnClosed then
@@ -443,6 +447,18 @@ local function createTable(index, position, parent, options)
 	afterAction = function()
 		local battle = match.Battle
 		if not battle then
+			return
+		end
+		if match.Replay then
+			-- a replay (Studio): no rewards, records or bot turns; the moves come from the recording
+			if battle.Winner and not match.Over then
+				match.Over = true
+				task.delay(RESET_DELAY, function()
+					if match.Battle == battle then
+						resetTable()
+					end
+				end)
+			end
 			return
 		end
 		if battle.Winner then
@@ -609,9 +625,28 @@ local function createTable(index, position, parent, options)
 				match.LogExperience[seat] = stats and (stats.Wins + stats.Losses) or 0
 			end
 		end
+		local replay = match.Replay and match.Replay.Data
+		local replayRng
+		if replay then
+			-- the same random numbers the recorded game used (shuffles), in order
+			local values, at = {}, 0
+			for v in string.gmatch(replay.Rng, "%d+") do
+				table.insert(values, tonumber(v))
+			end
+			replayRng = function(n)
+				at = at + 1
+				local v = values[at]
+				if not v or v > n then
+					match.Replay.Problem = ("random number %d doesn't match the recording"):format(at)
+					return 1
+				end
+				return v
+			end
+		end
 		local battle = BattleEngine.new({ Decks = { match.Decks[1], match.Decks[2] },
-			FirstPlayer = tutorial and 1 or firstPlayer,
-			Mulligan = not tutorial,
+			FirstPlayer = replay and replay.First or (tutorial and 1 or firstPlayer),
+			Mulligan = not tutorial and not replay,
+			Rng = replayRng,
 			Scripted = tutorial and TUTORIAL.Scripted or nil })
 		match.Battle = battle
 		match.Over = false
@@ -619,7 +654,7 @@ local function createTable(index, position, parent, options)
 		match.Timeouts = { 0, 0 }
 		match.TimerTurn = nil
 		match.TurnEndsAt = nil
-		if not tutorial then
+		if not tutorial and not replay then
 			local vsBot = match.Seats[1] == BOT or match.Seats[2] == BOT
 			for seat = 1, 2 do
 				local occupant = match.Seats[seat]
@@ -924,6 +959,10 @@ local function createTable(index, position, parent, options)
 			return
 		end
 
+		if match.Replay then
+			return -- (a replay plays itself)
+		end
+
 		-- The tutorial's steps, for the "Tutorial" analytics funnel
 		if action.Kind == "TutorialStep" then
 			local step = toInt(action.Step)
@@ -1018,8 +1057,92 @@ local function createTable(index, position, parent, options)
 		end
 	end
 
+	---------------------------------------------------------------------
+	-- Replays (Studio only, ReplayServer): a recorded game (ReplayLibrary)
+	-- played back move by move on the real battle screen, from one side.
+	-- control = { Seat, Speed, Paused, Step, Names } (ReplayServer changes
+	-- Speed / Paused / Step while it plays; Index, Total, Problem are reported back)
+	---------------------------------------------------------------------
+	local function runReplay(battle, control)
+		local data = match.Replay.Data
+		control.Total = #data.Actions
+		task.wait(3 / (control.Speed or 1))
+		for i, a in ipairs(data.Actions) do
+			if match.Battle ~= battle or battle.Winner then
+				break
+			end
+			while control.Paused and not control.Step and match.Battle == battle do
+				task.wait(0.1)
+			end
+			control.Step = false
+			if match.Battle ~= battle then
+				break
+			end
+			local target = a.T and { Side = a.T[1], Lane = a.T[2] } or nil
+			local ok, events
+			if a.K == "PlayCard" then
+				ok, events = battle:PlayCard(a.S, a.H, { Lane = a.L, Target = target, Slot = a.Sl })
+			elseif a.K == "SummonCelestial" then
+				ok, events = battle:SummonCelestial(a.S, a.L)
+			elseif a.K == "UseCommanderAbility" then
+				ok, events = battle:UseCommanderAbility(a.S, target)
+			elseif a.K == "UseSpark" then
+				ok, events = battle:UseSpark(a.S)
+			elseif a.K == "EndTurn" then
+				ok, events = battle:EndTurn(a.S)
+			elseif a.K == "Mulligan" then
+				ok, events = battle:Mulligan(a.S, a.P or {})
+			elseif a.K == "Concede" then
+				ok, events = battle:Concede(a.S)
+			end
+			if not ok then
+				control.Problem = ("move %d (%s) didn't work: %s"):format(i, tostring(a.K), tostring(events))
+				warn("Replay: " .. control.Problem)
+				break
+			end
+			local check = ("%d,%d,%d"):format(battle.Players[1].HP, battle.Players[2].HP, battle.Turn)
+			if a.C and check ~= a.C and not control.Problem then
+				control.Problem = ("move %d: the game drifted from the recording (%s, expected %s)"):format(i, check, a.C)
+				warn("Replay: " .. control.Problem)
+			end
+			control.Index = i
+			sendMatchUpdate(events)
+			afterAction()
+			local pause = a.K == "EndTurn" and 3.4 or 1.9
+			task.wait(pause / math.max(control.Speed or 1, 0.1))
+		end
+		control.Done = true
+	end
+
+	local function startReplay(player, data, control)
+		local viewSeat = control.Seat == 2 and 2 or 1
+		match.Replay = { Data = data, Control = control, Names = control.Names }
+		match.Seats[viewSeat] = player
+		match.Seats[3 - viewSeat] = BOT
+		for seat = 1, 2 do
+			local deck = data.Decks[seat]
+			local cards = {}
+			for i, id in ipairs(deck.Cards) do
+				cards[i] = id
+			end
+			match.Decks[seat] = { Commander = deck.Commander, Celestial = deck.Celestial, Cards = cards,
+				Format = deck.Format or "Open" }
+			match.Votes[seat] = 1
+			-- every card in the best finish you own (DevGrantAllFinishes for all-shiny videos)
+			match.Finishes[seat] = bestFinishes(player, match.Decks[seat])
+		end
+		send(player, { Kind = "Waiting", Message = "Starting the replay..." })
+		startMatch()
+		local battle = match.Battle
+		if battle then
+			task.spawn(runReplay, battle, control)
+		end
+		return battle ~= nil
+	end
+
 	self.Index = index
 	self.Virtual = virtual
+	self.StartReplay = startReplay
 	self.SeatOf = seatOf
 	self.HandleAction = handleAction
 	self.Leave = leaveSeat
@@ -1057,6 +1180,33 @@ local function newVirtualTable(isTutorial)
 	})
 	table.insert(tables, t)
 	return t
+end
+
+-- (Studio replays) a fresh off-table match for ReplayServer. The replay and
+-- its live controls are shared through the ReplayControl module.
+if game:GetService("RunService"):IsStudio() then
+	local ReplayControl = require(game:GetService("ServerScriptService"):WaitForChild("ReplayControl"))
+	ReplayControl.Start = function(player)
+		local session = ReplayControl.Sessions[player]
+		if not session then
+			return false
+		end
+		local current = tableOf(player)
+		if current then
+			current.Leave(player, current.SeatOf(player))
+			if current.Virtual then
+				current.Close()
+			end
+		end
+		local t = newVirtualTable(false)
+		local ok, started = pcall(t.StartReplay, player, session.Data, session)
+		if not ok or not started then
+			warn("Replay failed to start: " .. tostring(started))
+			t.Close()
+			return false
+		end
+		return true
+	end
 end
 
 local playRequest = Instance.new("RemoteFunction")

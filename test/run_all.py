@@ -315,8 +315,8 @@ for _, e in ipairs(M.remoteLog) do if e.Remote == "TableUpdate" then snapsBefore
 check("match started and TV got it", snapsBefore > 0 and tvs.TV1.LiveLamp.Color.R > 0.9, snapsBefore)
 local battleGui
 for _, g in ipairs(pg:GetChildren()) do if g:FindFirstChild("EndTurn", true) or g.Name == "BattleGui" then battleGui = g end end
--- the Commander intro: both Commanders big in the middle, the board dark, no hand yet
-do
+-- the Commander intro (when switched on): both Commanders big in the middle, the board dark, no hand yet
+if require(RS.CommanderIntro).Enabled then
 	local intro = {}
 	for _, d in ipairs(battleGui:GetDescendants()) do if d.Name == "IntroCommander" then table.insert(intro, d) end end
 	check("intro: both Commanders shown big", #intro == 2, #intro)
@@ -326,6 +326,10 @@ do
 	local left = 0
 	for _, d in ipairs(battleGui:GetDescendants()) do if d.Name == "IntroCommander" or d.Name == "IntroDim" then left = left + 1 end end
 	check("intro: cleans up after", left == 0, left)
+else
+	local intro = 0
+	for _, d in ipairs(battleGui:GetDescendants()) do if d.Name == "IntroCommander" then intro = intro + 1 end end
+	check("intro switched off: no intro, no voices", intro == 0)
 end
 -- mulligan: the opening hand shows; pick the first card, send it back
 local mull = battleGui and battleGui:FindFirstChild("Mulligan", true)

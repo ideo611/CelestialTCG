@@ -26,6 +26,11 @@ local SoundAssets = require(ReplicatedStorage:WaitForChild("SoundAssets"))
 
 local CommanderIntro = {}
 
+-- ON/OFF SWITCH for the intro and the Commander voice lines. Off: matches start
+-- straight into the opening hand, with no voices (the server's mulligan timer and
+-- replays also skip the intro's extra time).
+CommanderIntro.Enabled = false
+
 local CARD_ASPECT = 1060 / 1484
 local Z = 60 -- above the board, hand and effects
 local run = 0

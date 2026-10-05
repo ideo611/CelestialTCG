@@ -2876,7 +2876,8 @@ local function applyUpdate(payload, alreadyLogged)
 			-- big in the middle, the opponent's says their line and flies to its zone, then
 			-- yours answers; the opening hand waits until it's over
 			local players = payload.State and payload.State.Players
-			if players and not payload.Tutorial and (not payload.Series or (payload.Series.Game or 1) == 1) then
+			if players and not payload.Tutorial and (not payload.Series or (payload.Series.Game or 1) == 1)
+				and require(ReplicatedStorage:WaitForChild("CommanderIntro")).Enabled then
 				local them = players[3 - payload.Seat]
 				local me = players[payload.Seat]
 				gui:SetAttribute("IntroPlaying", true)

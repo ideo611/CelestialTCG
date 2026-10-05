@@ -73,6 +73,11 @@ function EconomyConfig.ProductKeyForId(productId)
 	return nil
 end
 
+-- Launch gift: until Ends (a time in seconds, os.time), every player who has a
+-- starter deck gets Boxes free Booster Boxes of their first starter's faction
+-- (once per player). Ends 2026-10-19, midnight Pacific.
+EconomyConfig.LaunchGift = { Ends = 1792393200, Boxes = 1 }
+
 -- A Booster Box: this many packs of one booster (picked when opening), plus a
 -- box topper: a Commander or Celestial (one you don't own yet if possible)
 -- in a shiny finish

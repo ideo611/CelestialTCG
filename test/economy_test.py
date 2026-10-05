@@ -210,6 +210,30 @@ local okR, msgR = shop("BuyProduct", { Product = "Ticket1" })
 check("restricted players can't buy tickets", not okR and msgR:find("region") ~= nil, msgR)
 PlayerData.IsRestricted = restrictedFn
 
+-- 8b. launch gift: a free box of your first starter's faction, once
+do
+	local gi = M.addPlayer("Gi", 606)
+	M.run(1)
+	local gd = PlayerData.Get(gi)
+	PlayerData.GrantStarter(gi, "Comet")
+	PlayerData.GrantStarter(gi, "Solar")
+	check("launch gift: one free box of the first starter's faction", gd.FactionBoxes.Comet == 1 and gd.FactionBoxes.Solar == nil
+		and gd.LaunchGiftGiven, tostring(gd.FactionBoxes.Comet))
+	gd.SealedBoxes = 0
+	local okG, boxG = PlayerData.OpenBox(gi, "Comet")
+	check("the free box opens as a Comet box", okG and boxG.PackType == "Comet" and #boxG.Packs == 12 and gd.FactionBoxes.Comet == nil)
+	local okG2 = PlayerData.OpenBox(gi, "Comet")
+	check("...only once", not okG2)
+	-- after the gift ends: nothing
+	local ends = EconomyConfig.LaunchGift.Ends
+	EconomyConfig.LaunchGift.Ends = os.time() - 1
+	local late = M.addPlayer("Late", 707)
+	M.run(1)
+	PlayerData.GrantStarter(late, "Void")
+	check("no gift after it ends", next(PlayerData.Get(late).FactionBoxes) == nil)
+	EconomyConfig.LaunchGift.Ends = ends
+end
+
 -- 9. the shop screens
 local pg = nik.PlayerGui
 local shopGui = pg:FindFirstChild("ShopGui")

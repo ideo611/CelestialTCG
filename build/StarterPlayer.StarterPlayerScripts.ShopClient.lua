@@ -1337,23 +1337,59 @@ local function renderBoxes()
 	make("UICorner", { CornerRadius = UDim.new(0, 12) }, shelf)
 	UiTheme.Panel(shelf)
 	local sealed = summary.SealedBoxes or 0
+	local gifts = {}
+	for packTypeId, count in pairs(summary.FactionBoxes or {}) do
+		if count > 0 and EconomyConfig.GetPackType(packTypeId) then
+			table.insert(gifts, packTypeId)
+		end
+	end
+	table.sort(gifts)
 	UiTheme.Title(label(shelf, "ShelfTitle", UDim2.fromScale(0.04, 0.1), UDim2.fromScale(0.5, 0.3),
 		"Your shelf", 24, { TextXAlignment = Enum.TextXAlignment.Left }))
-	label(shelf, "ShelfText", UDim2.fromScale(0.04, 0.45), UDim2.fromScale(0.6, 0.4),
-		sealed > 0 and ("%d sealed Booster Box%s. Open one whenever you like!"):format(sealed, sealed == 1 and "" or "es")
-			or ("No sealed boxes. You have %d pack ticket%s (use them on the Packs tab)."):format(summary.Tickets or 0,
-				(summary.Tickets or 0) == 1 and "" or "s"),
+	local lines = {}
+	for _, packTypeId in ipairs(gifts) do
+		table.insert(lines, ("A free %s Booster Box (launch gift)!"):format(packTypeId))
+	end
+	if sealed > 0 then
+		table.insert(lines, ("%d sealed Booster Box%s. Open one whenever you like!"):format(sealed, sealed == 1 and "" or "es"))
+	end
+	if #lines == 0 then
+		table.insert(lines, ("No sealed boxes. You have %d pack ticket%s (use them on the Packs tab)."):format(summary.Tickets or 0,
+			(summary.Tickets or 0) == 1 and "" or "s"))
+	end
+	label(shelf, "ShelfText", UDim2.fromScale(0.04, 0.42), UDim2.fromScale(0.58, 0.5), table.concat(lines, "\n"),
 		18, { Font = Enum.Font.Gotham, TextXAlignment = Enum.TextXAlignment.Left })
-	local openBox = button(shelf, "OpenSealedBox", "Open a box", UDim2.fromScale(0.68, 0.25), UDim2.fromScale(0.28, 0.5),
-		sealed > 0 and Color3.fromRGB(190, 140, 40) or GREY)
-	openBox.Activated:Connect(function()
-		if (summary.SealedBoxes or 0) < 1 then
-			message = "You don't have a sealed box yet."
-			render()
-			return
-		end
-		boxPicker.Visible = true
-	end)
+	-- one button per free box, then one for bought boxes
+	local buttons = {}
+	for _, packTypeId in ipairs(gifts) do
+		table.insert(buttons, { Name = "OpenGiftBox_" .. packTypeId, Text = "Open free " .. packTypeId .. " Box",
+			Color = Color3.fromRGB(190, 140, 40), PackType = packTypeId })
+	end
+	table.insert(buttons, { Name = "OpenSealedBox", Text = "Open a box",
+		Color = sealed > 0 and Color3.fromRGB(190, 140, 40) or GREY })
+	local height = math.min(0.5, 0.84 / #buttons)
+	for i, info in ipairs(buttons) do
+		local b = button(shelf, info.Name, info.Text, UDim2.fromScale(0.66, 0.08 + (i - 1) * (height + 0.02)),
+			UDim2.fromScale(0.3, height), info.Color)
+		b.Activated:Connect(function()
+			if info.PackType then
+				local ok, result = ask("OpenBox", { PackType = info.PackType })
+				if ok then
+					startBox(result)
+				else
+					message = result
+					render()
+				end
+				return
+			end
+			if (summary.SealedBoxes or 0) < 1 then
+				message = "You don't have a sealed box yet."
+				render()
+				return
+			end
+			boxPicker.Visible = true
+		end)
+	end
 end
 
 function render()

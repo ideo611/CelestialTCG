@@ -98,6 +98,9 @@ local function defaultData()
 		},
 		Tickets = 0,            -- Booster Pack Tickets: open any pack, no daily limit, never expire
 		SealedBoxes = 0,        -- Booster Boxes bought and not opened yet (faction picked when opening)
+		FactionBoxes = {},      -- free boxes locked to one booster: [packTypeId] = count (the launch gift)
+		FirstStarter = "",      -- the first starter deck they claimed
+		LaunchGiftGiven = false,
 		CoinPacksDay = 0,       -- the UTC day CoinPacksToday belongs to
 		CoinPacksToday = 0,     -- packs bought with coins today (limited per day)
 		Purchases = {},         -- Robux purchases already granted: list of { Id, Product, Time }
@@ -542,6 +545,9 @@ function PlayerData.GrantStarter(player, deckName)
 	if data.OwnedStarters[deckName] then
 		return false, "You already own that starter deck."
 	end
+	if (data.FirstStarter or "") == "" then
+		data.FirstStarter = deckName
+	end
 	data.OwnedStarters[deckName] = true
 	local finish = EconomyConfig.StarterFinish
 	addCopies(data, starter.Commander, finish, 1)
@@ -550,8 +556,42 @@ function PlayerData.GrantStarter(player, deckName)
 		addCopies(data, cardId, finish, count)
 	end
 	grantMissingStarterMats(data) -- the deck's playmat comes with it
+	PlayerData.GrantLaunchGift(player)
 	changed(player)
 	return true
+end
+
+-- The launch gift (EconomyConfig.LaunchGift): a free Booster Box of their first
+-- starter's faction, once, while the gift runs. Returns the faction if given now.
+PlayerData.GiftGiven = nil -- set by ShopServer: function(player, faction) to tell the player
+function PlayerData.GrantLaunchGift(player)
+	local data = PlayerData.Get(player)
+	local gift = EconomyConfig.LaunchGift
+	if not data or not gift or data.LaunchGiftGiven or os.time() >= gift.Ends then
+		return nil
+	end
+	local faction = data.FirstStarter ~= "" and data.FirstStarter or nil
+	if not faction then
+		-- (saves from before FirstStarter existed: any starter they own)
+		local owned = {}
+		for name in pairs(data.OwnedStarters) do
+			table.insert(owned, name)
+		end
+		table.sort(owned)
+		faction = owned[1]
+	end
+	if not faction or not EconomyConfig.GetPackType(faction) then
+		return nil
+	end
+	data.LaunchGiftGiven = true
+	data.FactionBoxes[faction] = (data.FactionBoxes[faction] or 0) + (gift.Boxes or 1)
+	Analytics.Event(player, "launch_gift", faction)
+	if PlayerData.GiftGiven then
+		task.spawn(PlayerData.GiftGiven, player, faction)
+	end
+	changed(player)
+	PlayerData.SaveSoon(player)
+	return faction
 end
 
 ---------------------------------------------------------------------
@@ -763,18 +803,27 @@ function PlayerData.OpenBox(player, packTypeId)
 	if not data then
 		return false, "Your cards haven't loaded yet."
 	end
-	if (data.SealedBoxes or 0) < 1 then
-		return false, "You don't have a sealed Booster Box."
-	end
 	local packType = type(packTypeId) == "string" and EconomyConfig.GetPackType(packTypeId)
 	if not packType then
 		return false, "Pick which booster the box holds."
+	end
+	-- a free box locked to this booster is used first, then a bought one
+	local locked = (data.FactionBoxes[packType.Id] or 0) > 0
+	if not locked and (data.SealedBoxes or 0) < 1 then
+		return false, "You don't have a sealed Booster Box."
 	end
 	local pool = Packs.GetPools(packType.Id).CommanderOrCelestial
 	if #pool == 0 then
 		return false, "That box can't be opened right now."
 	end
-	data.SealedBoxes = data.SealedBoxes - 1
+	if locked then
+		data.FactionBoxes[packType.Id] = data.FactionBoxes[packType.Id] - 1
+		if data.FactionBoxes[packType.Id] <= 0 then
+			data.FactionBoxes[packType.Id] = nil
+		end
+	else
+		data.SealedBoxes = data.SealedBoxes - 1
+	end
 	local box = EconomyConfig.Box
 	local opened = {}
 	for i = 1, box.Packs do
@@ -1409,6 +1458,7 @@ function PlayerData.GetSummary(player)
 		FirstWinTickets = EconomyConfig.FirstWinTickets or 0,
 		Tickets = data.Tickets or 0,
 		SealedBoxes = data.SealedBoxes or 0,
+		FactionBoxes = data.FactionBoxes or {},
 		CoinPacksLeft = PlayerData.CoinPacksLeft(data),
 		CoinPacksPerDay = EconomyConfig.DailyCoinPacks,
 	}

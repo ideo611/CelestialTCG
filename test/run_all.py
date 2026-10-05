@@ -313,7 +313,7 @@ check("mulligan sent back one card", sawMull)
 -- picking a hand card on your turn shows it big over the log
 do
 	local shown = false
-	for _ = 1, 2 do
+	for _ = 1, 4 do
 		local hc = battleGui and battleGui:FindFirstChild("HandCard_1", true)
 		if hc then hc.Activated:Fire() M.run(0.3) end
 		local pick = battleGui and battleGui:FindFirstChild("PickPreview", true)

@@ -352,6 +352,15 @@ function handlers.BuyProduct(player, args)
 	return true
 end
 
+-- The launch gift: tell them (once the screen has had a moment to load)
+PlayerData.GiftGiven = function(player, faction)
+	task.wait(4)
+	if player.Parent then
+		shopEvent:FireClient(player, { Kind = "Announcement", Tier = "Legendary",
+			Text = ("Launch gift! A free %s Booster Box is waiting at the Card Shop."):format(faction) })
+	end
+end
+
 function handlers.OpenBox(player, args)
 	return PlayerData.OpenBox(player, args.PackType)
 end

@@ -52,6 +52,7 @@ PlayerData.Changed = pushSummary
 ---------------------------------------------------------------------
 local function onJoin(player)
 	if PlayerData.Load(player) then
+		PlayerData.GrantLaunchGift(player) -- (players who already had a starter)
 		pushSummary(player)
 	end
 end

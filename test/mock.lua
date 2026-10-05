@@ -407,7 +407,7 @@ local CLASSES = {
 	PlayerGui = merge(BASE),
 	Camera = merge(BASE, { "CFrame", "FieldOfView", "CameraType", "ViewportSize" }),
 	Workspace = merge(BASE, { "CurrentCamera" }),
-	Service = merge(BASE, { "TouchEnabled", "KeyboardEnabled", "GamepadEnabled", "MouseEnabled" }),
+	Service = merge(BASE, { "TouchEnabled", "KeyboardEnabled", "GamepadEnabled", "MouseEnabled", "GamepadCursorEnabled" }),
 }
 -- defaults that scripts read back
 local DEFAULTS = {
@@ -803,7 +803,19 @@ uis.TouchEnabled = false
 uis.KeyboardEnabled = true
 uis.GamepadEnabled = false
 uis.MouseEnabled = true
+M.lastInput = "MouseButton1"
+rawset(uis, "__methods", {
+	GetLastInputType = function() return Enum.UserInputType[M.lastInput] end,
+	GetImageForKeyCode = function() return "" end,
+})
 services.UserInputService = uis
+local gamepadService = service("GamepadService")
+gamepadService.GamepadCursorEnabled = false
+rawset(gamepadService, "__methods", {
+	EnableGamepadCursor = function() gamepadService.GamepadCursorEnabled = true end,
+	DisableGamepadCursor = function() gamepadService.GamepadCursorEnabled = false end,
+})
+services.GamepadService = gamepadService
 
 local tweenService = service("TweenService")
 rawset(tweenService, "__methods", {

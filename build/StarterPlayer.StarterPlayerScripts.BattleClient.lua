@@ -2871,6 +2871,13 @@ local function applyUpdate(payload, alreadyLogged)
 	drawMats(mats[payload.Seat] or Playmats.DefaultId, mats[3 - payload.Seat] or Playmats.DefaultId)
 	for _, event in ipairs(payload.Events) do
 		if event.Type == "MatchStarted" then
+			-- the two Commanders' voice lines: whoever goes first speaks, the other answers
+			if payload.State and payload.State.Players and event.FirstPlayer then
+				local players = payload.State.Players
+				require(ReplicatedStorage:WaitForChild("SoundAssets")).PlayIntro(
+					players[event.FirstPlayer] and players[event.FirstPlayer].CommanderId,
+					players[3 - event.FirstPlayer] and players[3 - event.FirstPlayer].CommanderId)
+			end
 			logLines = {}
 			inspectMode = false
 			closeInspect()

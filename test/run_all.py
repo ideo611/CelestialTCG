@@ -319,6 +319,12 @@ for _, g in ipairs(pg:GetChildren()) do if g:FindFirstChild("EndTurn", true) or 
 local mull = battleGui and battleGui:FindFirstChild("Mulligan", true)
 check("mulligan screen shows", mull and mull.Visible)
 do
+	local gs = game:GetService("SoundService"):FindFirstChild("GameSounds")
+	local n = 0
+	for _, c in ipairs(gs and gs:GetChildren() or {}) do if c.Name == "CommanderVoice" then n = n + 1 end end
+	check("match start: one Commander speaks at a time", n == 1, n)
+end
+do
 	M.run(0.5)
 	local dg = pg:FindFirstChild("HudDockGui")
 	local ob = pg:FindFirstChild("OpenMyBinder", true)

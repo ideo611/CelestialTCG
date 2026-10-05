@@ -222,7 +222,7 @@ check("coin button shows packs left today", shopGui:FindFirstChild("BuyWithCoins
 shopGui:FindFirstChild("Tab_Boxes", true).Activated:Fire()
 M.run(1)
 local boxBuy = shopGui:FindFirstChild("Buy_BoosterBox", true)
-check("Tickets & Boxes tab shows the products with Robux prices", boxBuy and boxBuy.Text == "R$ 449", boxBuy and boxBuy.Text)
+check("Tickets & Boxes tab shows the products with Robux prices", boxBuy and boxBuy.Text == "R$ 720", boxBuy and boxBuy.Text)
 SHOTS.boxesTab = DUMP(shopGui, 1600, 900)
 MPS.ProcessReceipt({ PlayerId = 101, ProductId = 1449, PurchaseId = "rcpt-box-2" })
 M.run(1)

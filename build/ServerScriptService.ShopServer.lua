@@ -306,6 +306,22 @@ end
 -- Robux products: what's for sale and whether this player can buy them
 -- (tickets and boxes hold random cards, so they're blocked where paid random
 -- items are restricted)
+-- The price Roblox will actually charge (set on the Creator Dashboard),
+-- looked up once per server; EconomyConfig's number is only a fallback.
+local livePrices = {}
+local function priceOf(product)
+	if product.ProductId == 0 then
+		return product.Robux
+	end
+	if livePrices[product.ProductId] == nil then
+		local ok, info = pcall(function()
+			return MarketplaceService:GetProductInfo(product.ProductId, Enum.InfoType.Product)
+		end)
+		livePrices[product.ProductId] = (ok and type(info) == "table" and tonumber(info.PriceInRobux)) or false
+	end
+	return livePrices[product.ProductId] or product.Robux
+end
+
 function handlers.GetProducts(player)
 	local restricted = PlayerData.IsRestricted(player)
 	local list = {}
@@ -314,7 +330,7 @@ function handlers.GetProducts(player)
 		table.insert(list, {
 			Key = key,
 			Name = product.Name,
-			Robux = product.Robux,
+			Robux = priceOf(product),
 			Ready = product.ProductId ~= 0,
 		})
 	end

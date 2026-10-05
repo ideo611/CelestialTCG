@@ -682,6 +682,19 @@ function Battle:_unitAt(seat, target)
 	return nil
 end
 
+-- Reignite (Ignara): pairs of { your unit with Ignite, the enemy unit across from it }
+function Battle:_reigniteTargets(seat)
+	local pairsList = {}
+	local mine, theirs = self.Players[seat].Lanes, self.Players[other(seat)].Lanes
+	for lane = 1, Rules.Lanes do
+		local unit, across = mine[lane], theirs[lane]
+		if unit and (unit.Ignite or 0) > 0 and across then
+			table.insert(pairsList, { unit, across })
+		end
+	end
+	return pairsList
+end
+
 -- Checks an effect can be used right now. Returns true, or false + message.
 function Battle:_checkEffect(seat, effect, target)
 	if effect.Kind == "Multi" then
@@ -736,6 +749,9 @@ function Battle:_checkEffect(seat, effect, target)
 		GrowStrongestFriendly = true, ShieldWeakestFriendly = true }
 	if needsFriendly[effect.Kind] and not effect.Bonus and #self:_units(seat) == 0 then
 		return false, "You have no units on the board."
+	end
+	if effect.Kind == "Reignite" and #self:_reigniteTargets(seat) == 0 then
+		return false, "None of your Ignite units has an enemy across from it."
 	end
 	if effect.Kind == "ShieldAllFriendly" then
 		local any = false
@@ -916,6 +932,15 @@ function Battle:_applyEffect(seat, effect, target, source)
 		for _, unit in ipairs(self:_units(other(seat))) do
 			if not effect.MaxPower or effectivePower(unit) <= effect.MaxPower then
 				self:_returnToHand(unit)
+			end
+		end
+	elseif kind == "Reignite" then
+		-- every Ignite on your side goes off again, lane by lane
+		for _, pair in ipairs(self:_reigniteTargets(seat)) do
+			local unit, across = pair[1], pair[2]
+			if across.HP > 0 then
+				self:_emit({ Type = "Ignite", Uid = unit.Uid, Target = across.Uid, Amount = unit.Ignite })
+				self:_damageUnit(across, unit.Ignite)
 			end
 		end
 	elseif kind == "PayForEnergy" then

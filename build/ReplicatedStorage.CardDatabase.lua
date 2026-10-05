@@ -57,7 +57,7 @@ local CardDatabase = {}
 -- match log can compare games before and after the change. (The log also
 -- fingerprints every card automatically, as a backup.)
 ---------------------------------------------------------------------
-CardDatabase.BalanceVersion = "2026-10-04-balance-21"
+CardDatabase.BalanceVersion = "2026-10-05-balance-22"
 
 ---------------------------------------------------------------------
 -- GAME RULES (draft values from the design doc)
@@ -168,7 +168,7 @@ local EFFECT_KINDS = {
 	Destroy = true, DestroyStrongestEnemy = true, DamageAllUnits = true, DamageOtherEnemies = true,
 	GiveStreak = true, StreakAllFriendly = true,
 	ReturnToHand = true, ReturnStrongestEnemy = true, ReturnAllEnemies = true,
-	PayForEnergy = true, Multi = true,
+	PayForEnergy = true, Reignite = true, Multi = true,
 }
 local TARGETS = { AnyUnit = true, FriendlyUnit = true, EnemyUnit = true }
 -- Only Anomalies can use these (they act on whatever set the Anomaly off)
@@ -310,8 +310,8 @@ addCard {
 	HP = 20,
 	CommanderAbility = {
 		EnergyCost = 4,
-		Text = "Deal 1 damage to any unit.",
-		Effect = { Kind = "DamageUnit", Amount = 1, Target = "AnyUnit" },
+		Text = "Reignite: each of your units with Ignite hits the enemy unit across from it again.",
+		Effect = { Kind = "Reignite" },
 	},
 }
 

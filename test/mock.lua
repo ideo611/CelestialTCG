@@ -740,7 +740,7 @@ rawset(players, "__methods", {
 })
 services.Players = players
 
-function M.addPlayer(name, userId)
+function M.addPlayer(name, userId, joinData)
 	local p = Instance.new("Player")
 	p.Name = name
 	p.DisplayName = name
@@ -750,7 +750,8 @@ function M.addPlayer(name, userId)
 	gui.Parent = p
 	p.Parent = players
 	table.insert(playerList, p)
-	rawset(p, "__methods", { Kick = function() end, GetRankInGroup = function() return 0 end })
+	rawset(p, "__methods", { Kick = function() end, GetRankInGroup = function() return 0 end,
+		GetJoinData = function() return joinData or {} end })
 	playerAdded:Fire(p)
 	return p
 end

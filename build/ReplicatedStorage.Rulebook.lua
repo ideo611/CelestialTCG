@@ -70,6 +70,11 @@ local function collecting()
 		("• <b>Star Shards:</b> break down extra copies (beyond a playset). %d shards = 1 pack."):format(E.PackPriceShards),
 		("• <b>Singles:</b> buy the exact card you want with coins. <b>Starter decks:</b> first one free, then %d coins."):format(E.StarterDeckPriceCoins),
 	}
+	local referral = E.Referral
+	if referral then
+		table.insert(list, ("• <b>Invite friends:</b> when a new friend you invite finishes their first match vs the bot, you both get %d Pack Tickets (up to %d friends)."):format(
+			referral.Tickets, referral.MaxFriends))
+	end
 	local gift = giftLine()
 	if gift then
 		table.insert(list, gift)

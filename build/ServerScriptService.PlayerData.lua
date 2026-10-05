@@ -101,6 +101,12 @@ local function defaultData()
 		FactionBoxes = {},      -- free boxes locked to one booster: [packTypeId] = count (the launch gift)
 		FirstStarter = "",      -- the first starter deck they claimed
 		LaunchGiftGiven = false,
+		Referral = {            -- invited by a friend (EconomyConfig.Referral)
+			By = 0,             -- the inviter's UserId (0 = not invited); only set on a brand-new save
+			Done = false,       -- finished their first match vs the bot: their tickets are paid
+			Credited = false,   -- the inviter's tickets are recorded (ReferralServer)
+		},
+		ReferralClaimed = 0,    -- inviter side: tickets already collected from friends' first matches
 		CoinPacksDay = 0,       -- the UTC day CoinPacksToday belongs to
 		CoinPacksToday = 0,     -- packs bought with coins today (limited per day)
 		Purchases = {},         -- Robux purchases already granted: list of { Id, Product, Time }
@@ -320,7 +326,8 @@ function PlayerData.Load(player)
 		return false
 	end
 
-	if type(data) ~= "table" then
+	local brandNew = type(data) ~= "table"
+	if brandNew then
 		data = defaultData()
 	else
 		reconcile(data, defaultData())
@@ -328,7 +335,7 @@ function PlayerData.Load(player)
 	grantMissingStarterMats(data)
 	topUpStarters(data)
 	grantPlaytestCoins(data)
-	profiles[player] = { Data = data, Temporary = false, Token = token, LastSave = os.clock() }
+	profiles[player] = { Data = data, Temporary = false, Token = token, LastSave = os.clock(), New = brandNew }
 	PlayerData.ApplySettings(player)
 	player:SetAttribute("DataLoaded", true) -- lifts the loading screen
 	Analytics.Onboarding(player, "load_complete")
@@ -464,6 +471,12 @@ end
 
 function PlayerData.IsLoaded(player)
 	return profiles[player] ~= nil
+end
+
+-- True when this visit made their save (their first time in the game)
+function PlayerData.IsNew(player)
+	local profile = profiles[player]
+	return profile ~= nil and profile.New == true
 end
 
 function PlayerData.IsTemporary(player)
@@ -651,11 +664,12 @@ local function payFirstWin(player, data)
 end
 
 -- Called when a match ends. Returns coins given, the first-win bonus coins,
--- then first-win tickets.
+-- first-win tickets, then invited-friend tickets (their first full match vs the bot).
+PlayerData.ReferralDone = nil -- set by ReferralServer: function(player, inviterId) credits the inviter
 function PlayerData.RecordMatch(player, won, vsBot, turns)
 	local data = PlayerData.Get(player)
 	if not data then
-		return 0, 0, 0
+		return 0, 0, 0, 0
 	end
 	local rewards = EconomyConfig.MatchRewards
 	if won then
@@ -678,8 +692,62 @@ function PlayerData.RecordMatch(player, won, vsBot, turns)
 	if won then
 		bonus, tickets = payFirstWin(player, data)
 	end
+	-- invited by a friend: their first full match vs the bot pays them both
+	local referralTickets = 0
+	local referral = data.Referral
+	local config = EconomyConfig.Referral
+	if vsBot and config and referral and referral.By ~= 0 and not referral.Done then
+		referral.Done = true
+		referralTickets = config.Tickets
+		data.Tickets = (data.Tickets or 0) + referralTickets
+		Analytics.Event(player, "referral_completed", tostring(referral.By), referralTickets)
+		if PlayerData.ReferralDone then
+			task.spawn(PlayerData.ReferralDone, player, referral.By)
+		end
+		PlayerData.SaveSoon(player)
+	end
 	changed(player)
-	return given, bonus, tickets
+	return given, bonus, tickets, referralTickets
+end
+
+-- Invited by a friend: remembered only on a brand-new save, never yourself
+function PlayerData.SetReferredBy(player, inviterId)
+	local data = PlayerData.Get(player)
+	if not data or not PlayerData.IsNew(player) or type(inviterId) ~= "number" or inviterId <= 0
+		or inviterId == player.UserId or data.Referral.By ~= 0 then
+		return false
+	end
+	data.Referral.By = inviterId
+	changed(player)
+	PlayerData.SaveSoon(player)
+	return true
+end
+
+function PlayerData.MarkReferralCredited(player)
+	local data = PlayerData.Get(player)
+	if data then
+		data.Referral.Credited = true
+		PlayerData.SaveSoon(player)
+	end
+end
+
+-- Inviter side: earned = all the tickets friends' first matches have earned
+-- them (kept in ReferralServer's store). Pays what hasn't been collected yet.
+function PlayerData.CollectReferralTickets(player, earned)
+	local data = PlayerData.Get(player)
+	if not data or type(earned) ~= "number" then
+		return 0
+	end
+	local owed = earned - (data.ReferralClaimed or 0)
+	if owed <= 0 then
+		return 0
+	end
+	data.ReferralClaimed = earned
+	data.Tickets = (data.Tickets or 0) + owed
+	Analytics.Event(player, "referral_reward", "inviter", owed)
+	changed(player)
+	PlayerData.SaveSoon(player)
+	return owed
 end
 
 -- Onboarding progress: the tutorial

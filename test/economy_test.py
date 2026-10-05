@@ -281,6 +281,64 @@ shopGui:FindFirstChild("BoxNextPack", true).Activated:Fire()
 M.run(1)
 check("Done closes the box", not boxScreen.Visible)
 
+-- 10. invite a friend: their first full bot match pays you both
+local REF = EconomyConfig.Referral
+local ana = M.addPlayer("Ana", 301)
+M.run(3)
+local anaBefore = PlayerData.Get(ana).Tickets
+local ben = M.addPlayer("Ben", 302, { ReferredByPlayerId = 301 })
+M.run(3)
+local benData = PlayerData.Get(ben)
+check("invited new player remembers the inviter", benData and benData.Referral.By == 301, benData and benData.Referral.By)
+local c0, b0, t0, f0 = PlayerData.RecordMatch(ben, false, true, 3)
+check("a too-short bot match doesn't count", (f0 or 0) == 0 and not benData.Referral.Done)
+local benBefore = benData.Tickets
+local _, _, _, friendTickets = PlayerData.RecordMatch(ben, false, true, 8)
+M.run(4)
+check("friend gets the tickets after their first full bot match", friendTickets == REF.Tickets and benData.Tickets == benBefore + REF.Tickets,
+	tostring(friendTickets) .. " " .. tostring(benData.Tickets - benBefore))
+check("online inviter gets the tickets", PlayerData.Get(ana).Tickets == anaBefore + REF.Tickets, PlayerData.Get(ana).Tickets - anaBefore)
+check("the friend's credit is recorded", benData.Referral.Credited == true)
+local _, _, _, again = PlayerData.RecordMatch(ben, true, true, 8)
+M.run(3)
+check("only the first match pays", (again or 0) == 0 and PlayerData.Get(ana).Tickets == anaBefore + REF.Tickets)
+-- an existing player can't be referred
+M.removePlayer(ana) M.run(3)
+local ana2 = M.addPlayer("Ana", 301, { ReferredByPlayerId = 302 })
+M.run(3)
+check("returning players aren't counted as invited", PlayerData.Get(ana2) and PlayerData.Get(ana2).Referral.By == 0)
+check("inviter's tickets survived the rejoin", PlayerData.Get(ana2).Tickets == anaBefore + REF.Tickets, PlayerData.Get(ana2).Tickets - anaBefore)
+-- self-invite
+local eve = M.addPlayer("Eve", 205, { ReferredByPlayerId = 205 })
+M.run(3)
+check("can't invite yourself", PlayerData.Get(eve).Referral.By == 0)
+-- offline inviter collects when they join
+local carl = M.addPlayer("Carl", 203, { ReferredByPlayerId = 204 })
+M.run(3)
+PlayerData.RecordMatch(carl, true, true, 9)
+M.run(4)
+local dana = M.addPlayer("Dana", 204)
+M.run(4)
+check("offline inviter collects on join", PlayerData.Get(dana).Tickets == REF.Tickets,
+	PlayerData.Get(dana).Tickets)
+-- the cap
+local store = game:GetService("DataStoreService"):GetDataStore("Referrals_v1")
+store:SetAsync("204", { Earned = REF.Tickets * REF.MaxFriends, Count = REF.MaxFriends, Friends = {} })
+local finn = M.addPlayer("Finn", 206, { ReferredByPlayerId = 204 })
+M.run(3)
+PlayerData.RecordMatch(finn, true, true, 9)
+M.run(4)
+check("past the limit: the friend still gets theirs", PlayerData.Get(finn).Tickets >= REF.Tickets)
+check("past the limit: the inviter's count doesn't grow", store:GetAsync("204").Count == REF.MaxFriends, store:GetAsync("204").Count)
+-- the invite window
+local inviteB = nik.PlayerGui:FindFirstChild("InviteFriends", true)
+if inviteB then inviteB.Activated:Fire() M.run(1) end
+local inviteGui = nik.PlayerGui:FindFirstChild("InviteGui")
+check("Invite friends opens the invite window", inviteGui and inviteGui.Enabled)
+check("invite window shows progress", inviteGui and inviteGui:FindFirstChild("InviteStatus", true).Text:find("/ " .. REF.MaxFriends) ~= nil,
+	inviteGui and inviteGui:FindFirstChild("InviteStatus", true).Text)
+SHOTS.invite = DUMP(inviteGui, 1600, 900)
+
 check("no script errors", #M.errors == 0, M.errors[1])
 return results
 """)
@@ -298,7 +356,7 @@ def to_py(t):
             return [to_py(t[k]) for k in sorted(keys)]
         return {k: to_py(v) for k, v in t.items()}
     return t
-for name in ["boxesTab", "boxTopper", "boxAll"]:
+for name in ["boxesTab", "boxTopper", "boxAll", "invite"]:
     shot = G.SHOTS[name]
     if shot:
         render(to_py(shot), 1600, 900, OUT + name + ".png")

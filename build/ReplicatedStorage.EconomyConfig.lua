@@ -78,6 +78,12 @@ end
 -- (once per player). Ends 2026-10-19, midnight Pacific.
 EconomyConfig.LaunchGift = { Ends = 1792393200, Boxes = 1 }
 
+-- Invite a friend: when a brand-new player who joined from your invite
+-- finishes their first full match vs the bot (MatchRewards.MinTurns turns),
+-- you each get Tickets Booster Pack Tickets. Each player is rewarded for up to
+-- MaxFriends invited friends.
+EconomyConfig.Referral = { Tickets = 5, MaxFriends = 10 }
+
 -- A Booster Box: this many packs of one booster (picked when opening), plus a
 -- box topper: a Commander or Celestial (one you don't own yet if possible)
 -- in a shiny finish

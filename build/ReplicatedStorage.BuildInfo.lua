@@ -9,6 +9,6 @@
 
 local BuildInfo = {}
 
-BuildInfo.BuildVersion = "2026-10-05.14"
+BuildInfo.BuildVersion = "2026-10-05.15"
 
 return BuildInfo

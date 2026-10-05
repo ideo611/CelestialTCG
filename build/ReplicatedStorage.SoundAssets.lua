@@ -112,61 +112,54 @@ function SoundAssets.Play(name, pitch, volumeScale)
 	end
 end
 
--- The match-start exchange: the first player's Commander speaks, then the
--- other replies once the first line has finished. A new call (the next game)
--- cancels an exchange still playing.
-local introRun = 0
-function SoundAssets.PlayIntro(firstCommanderId, secondCommanderId, delaySeconds)
+-- One Commander's match-start line: plays it and waits until it has finished
+-- (at most 5 seconds, so a missing or slow sound can't hold things up).
+-- keepGoing (optional) = function() returning false to cut it short.
+function SoundAssets.PlayVoice(commanderId, keepGoing)
 	if not RunService:IsClient() then
 		return
 	end
-	introRun = introRun + 1
-	local run = introRun
-	task.spawn(function()
-		task.wait(delaySeconds or 0.8)
-		for i, commanderId in ipairs({ firstCommanderId, secondCommanderId }) do
-			if run ~= introRun or not soundOn() then
-				return
-			end
-			local lines = SoundAssets.CommanderVoice[commanderId]
-			local choices = {}
-			for _, id in ipairs(lines or {}) do
-				if id ~= 0 then
-					table.insert(choices, id)
-				end
-			end
-			if #choices > 0 then
-				if not folder then
-					folder = Instance.new("Folder")
-					folder.Name = "GameSounds"
-					folder.Parent = SoundService
-				end
-				local sound = Instance.new("Sound")
-				sound.Name = "CommanderVoice"
-				sound.SoundId = "rbxassetid://" .. choices[math.random(1, #choices)]
-				sound.Volume = SoundAssets.VoiceVolume
-				sound.Parent = folder
-				local finished = false
-				sound.Ended:Connect(function()
-					finished = true
-				end)
-				sound:Play()
-				-- wait for the line to end (a missing or slow-loading sound can't hold things up)
-				local started = os.clock()
-				while not finished and run == introRun and os.clock() - started < 6 do
-					task.wait(0.1)
-				end
-				if run ~= introRun then
-					sound:Stop()
-				end
-				task.delay(1, function()
-					sound:Destroy()
-				end)
-				if i == 1 then
-					task.wait(SoundAssets.VoiceGap)
-				end
-			end
+	keepGoing = keepGoing or function()
+		return true
+	end
+	if not soundOn() then
+		task.wait(1.2) -- (sound off: a short beat instead, so the intro still flows)
+		return
+	end
+	local choices = {}
+	for _, id in ipairs(SoundAssets.CommanderVoice[commanderId] or {}) do
+		if id ~= 0 then
+			table.insert(choices, id)
 		end
+	end
+	if #choices == 0 then
+		task.wait(1.2)
+		return
+	end
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = "GameSounds"
+		folder.Parent = SoundService
+	end
+	local sound = Instance.new("Sound")
+	sound.Name = "CommanderVoice"
+	sound.SoundId = "rbxassetid://" .. choices[math.random(1, #choices)]
+	sound.Volume = SoundAssets.VoiceVolume
+	sound.Parent = folder
+	local finished = false
+	sound.Ended:Connect(function()
+		finished = true
+	end)
+	sound:Play()
+	local started = os.clock()
+	while not finished and keepGoing() and os.clock() - started < 5 do
+		task.wait(0.1)
+	end
+	if not finished then
+		sound:Stop()
+	end
+	task.delay(1, function()
+		sound:Destroy()
 	end)
 end
 

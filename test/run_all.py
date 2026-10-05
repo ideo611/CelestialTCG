@@ -315,6 +315,18 @@ for _, e in ipairs(M.remoteLog) do if e.Remote == "TableUpdate" then snapsBefore
 check("match started and TV got it", snapsBefore > 0 and tvs.TV1.LiveLamp.Color.R > 0.9, snapsBefore)
 local battleGui
 for _, g in ipairs(pg:GetChildren()) do if g:FindFirstChild("EndTurn", true) or g.Name == "BattleGui" then battleGui = g end end
+-- the Commander intro: both Commanders big in the middle, the board dark, no hand yet
+do
+	local intro = {}
+	for _, d in ipairs(battleGui:GetDescendants()) do if d.Name == "IntroCommander" then table.insert(intro, d) end end
+	check("intro: both Commanders shown big", #intro == 2, #intro)
+	check("intro: the opening hand waits", not battleGui:FindFirstChild("Mulligan", true).Visible)
+	results.intro = dump(battleGui, 1600, 900)
+	M.run(18) -- (the mock's sounds never report ending, so each line runs to its time limit)
+	local left = 0
+	for _, d in ipairs(battleGui:GetDescendants()) do if d.Name == "IntroCommander" or d.Name == "IntroDim" then left = left + 1 end end
+	check("intro: cleans up after", left == 0, left)
+end
 -- mulligan: the opening hand shows; pick the first card, send it back
 local mull = battleGui and battleGui:FindFirstChild("Mulligan", true)
 check("mulligan screen shows", mull and mull.Visible)
@@ -322,7 +334,7 @@ do
 	local gs = game:GetService("SoundService"):FindFirstChild("GameSounds")
 	local n = 0
 	for _, c in ipairs(gs and gs:GetChildren() or {}) do if c.Name == "CommanderVoice" then n = n + 1 end end
-	check("match start: one Commander speaks at a time", n == 1, n)
+	check("match start: never two Commanders at once", n <= 1, n)
 end
 do
 	M.run(0.5)
@@ -544,7 +556,7 @@ print("singles:", res.get("singlesPrices"))
 print("events seen:", res.get("eventKinds"))
 for name, size in [("mulligan", (1600, 900)), ("graveyard", (1600, 900)), ("deckEditor", (1600, 900)), ("deckEditor2", (1600, 900)), ("starterWelcome", (1600, 900)), ("starterNebula", (1600, 900)), ("shopPacks", (1600, 900)),
                    ("shopPicker", (1600, 900)), ("shopReveal", (1600, 900)), ("shopSingles", (1600, 900)),
-                   ("binder", (1600, 900)), ("binder2", (1600, 900)), ("battle", (1600, 900)), ("battle2", (1600, 900)), ("battlePhone", (844, 390)), ("battlePhonePick", (844, 390)), ("deckEditorPhone", (1169, 540)), ("shopPhone", (1169, 540)), ("rulebook", (1600, 900)), ("rulebook2", (1600, 900)), ("rulebookPhone", (844, 390)), ("tv", (540, 300)), ("tvLive", (420, 240))]:
+                   ("binder", (1600, 900)), ("binder2", (1600, 900)), ("battle", (1600, 900)), ("battle2", (1600, 900)), ("battlePhone", (844, 390)), ("battlePhonePick", (844, 390)), ("deckEditorPhone", (1169, 540)), ("shopPhone", (1169, 540)), ("intro", (1600, 900)), ("rulebook", (1600, 900)), ("rulebook2", (1600, 900)), ("rulebookPhone", (844, 390)), ("tv", (540, 300)), ("tvLive", (420, 240))]:
     if res.get(name):
         render(res[name], size[0], size[1], f"{OUT}/{name}.png")
 import json

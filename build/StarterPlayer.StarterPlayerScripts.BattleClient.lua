@@ -1575,6 +1575,7 @@ do
 		local state = current and current.State
 		local me = state and state.Players[current.Seat]
 		local open = state and state.Phase == "Mulligan" and me and not me.MulliganDone and not state.Winner
+			and not gui:GetAttribute("IntroPlaying") -- (after the Commander intro)
 		if not open then
 			overlay.Visible = false
 			return
@@ -2871,12 +2872,28 @@ local function applyUpdate(payload, alreadyLogged)
 	drawMats(mats[payload.Seat] or Playmats.DefaultId, mats[3 - payload.Seat] or Playmats.DefaultId)
 	for _, event in ipairs(payload.Events) do
 		if event.Type == "MatchStarted" then
-			-- the two Commanders' voice lines: whoever goes first speaks, the other answers
-			if payload.State and payload.State.Players and event.FirstPlayer then
-				local players = payload.State.Players
-				require(ReplicatedStorage:WaitForChild("SoundAssets")).PlayIntro(
-					players[event.FirstPlayer] and players[event.FirstPlayer].CommanderId,
-					players[3 - event.FirstPlayer] and players[3 - event.FirstPlayer].CommanderId)
+			-- the Commander intro (first game of a match, not the tutorial): both Commanders
+			-- big in the middle, the opponent's says their line and flies to its zone, then
+			-- yours answers; the opening hand waits until it's over
+			local players = payload.State and payload.State.Players
+			if players and not payload.Tutorial and (not payload.Series or (payload.Series.Game or 1) == 1) then
+				local them = players[3 - payload.Seat]
+				local me = players[payload.Seat]
+				gui:SetAttribute("IntroPlaying", true)
+				require(ReplicatedStorage:WaitForChild("CommanderIntro")).Play({
+					Parent = root,
+					Visual = animSpeed > 0,
+					Top = { CommanderId = them and them.CommanderId, Finish = them and finishFor("Enemy", them.CommanderId),
+						Slot = enemyCommander },
+					Bottom = { CommanderId = me and me.CommanderId, Finish = me and finishFor("Self", me.CommanderId),
+						Slot = myCommander },
+					OnDone = function()
+						gui:SetAttribute("IntroPlaying", false)
+						if refreshMulligan then
+							refreshMulligan()
+						end
+					end,
+				})
 			end
 			logLines = {}
 			inspectMode = false

@@ -31,7 +31,8 @@ local RateLimit = require(ServerScriptService:WaitForChild("RateLimit"))
 
 local BOT = "BOT"
 local BOT_ACTION_DELAY = 0.8 -- seconds between bot plays, so you can follow along
-local MULLIGAN_SECONDS = 30  -- time to choose a starting hand before it's kept as is
+local MULLIGAN_SECONDS = 42  -- time to choose a starting hand before it's kept as is
+                             -- (about 12 of it is the Commander intro before the hand appears)
 local TABLE_WOOD = Color3.fromRGB(120, 80, 52)
 local TABLE_WOOD_DARK = Color3.fromRGB(80, 52, 36)
 local FELT = Color3.fromRGB(40, 110, 70)
@@ -1066,7 +1067,7 @@ local function createTable(index, position, parent, options)
 	local function runReplay(battle, control)
 		local data = match.Replay.Data
 		control.Total = #data.Actions
-		task.wait(3 / (control.Speed or 1))
+		task.wait(3 / (control.Speed or 1) + 9) -- (the Commander intro plays first)
 		for i, a in ipairs(data.Actions) do
 			if match.Battle ~= battle or battle.Winner then
 				break

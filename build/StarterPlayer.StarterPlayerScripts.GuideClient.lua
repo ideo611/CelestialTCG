@@ -161,14 +161,20 @@ local offer = panel(gui, "TutorialOffer", UDim2.fromScale(0.5, 0.5), UDim2.fromS
 make("UISizeConstraint", { MinSize = Vector2.new(300, 240) }, offer)
 local varroArt = CardArt.ArtFor and CardArt.ArtFor("CMD-SOL-01")
 if varroArt then
-	make("ImageLabel", {
+	-- head and shoulders: the top of his 1060 x 1484 card art (a plain crop
+	-- would center on his chest and cut off his face)
+	local portrait = make("ImageLabel", {
 		Name = "Portrait",
 		Position = UDim2.fromScale(0.04, 0.08),
 		Size = UDim2.fromScale(0.26, 0.5),
 		BackgroundTransparency = 1,
 		Image = varroArt,
+		ImageRectOffset = Vector2.new(180, 0),
+		ImageRectSize = Vector2.new(700, 760),
 		ScaleType = Enum.ScaleType.Crop,
 	}, offer)
+	make("UICorner", { CornerRadius = UDim.new(0, 10) }, portrait)
+	make("UIStroke", { Color = GOLD, Thickness = 2, Transparency = 0.2 }, portrait)
 end
 text(offer, "OfferTitle", UDim2.fromScale(0.33, 0.06), UDim2.fromScale(0.63, 0.16), "Ready, cadet?", { TextColor3 = GOLD })
 text(offer, "OfferText", UDim2.fromScale(0.33, 0.24), UDim2.fromScale(0.63, 0.36),

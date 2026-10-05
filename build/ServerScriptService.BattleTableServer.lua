@@ -63,9 +63,12 @@ local TUTORIAL = {
 			"LUN-004", "LUN-001", "LUN-004", "LUN-001", "LUN-004", "LUN-001", "LUN-004",
 		} },
 	},
+	-- Lane 3 stays empty on both sides (units go in lanes 1-2), so the Celestial
+	-- always has an open lane with nothing across from it. Selene can't drop
+	-- below 1 HP until Flare Stallion (Rush) hits her: the summon is the finish.
 	Scripted = {
-		{ StartingEnergy = 2, CelestialDiscount = 2, HandSize = 4 },
-		{ HP = 12, CelestialDiscount = -20, HandSize = 3 },
+		{ StartingEnergy = 2, CelestialDiscount = 2, HandSize = 4, UnitLanes = { 1, 2 }, CelestialLanes = { 3 } },
+		{ HP = 12, CelestialDiscount = -20, HandSize = 3, UnitLanes = { 1, 2 }, FinishedByCelestial = true },
 	},
 }
 

@@ -157,6 +157,22 @@ for turn = 1, 14 do
 end
 local done = lastPayload("TutorialDone", before)
 check("tutorial finishes", done ~= nil, done and tostring(done.Won))
+-- the finish: Flare Stallion, summoned in lane 3 (nothing across), lands the last hit
+local finalMatch = lastPayload("Match", before)
+local finisher
+for i = before + 1, #M.remoteLog do
+	local e = M.remoteLog[i]
+	local pl = type(e.Args[1]) == "table" and e.Args[1]
+	if e.Remote == "BattleUpdate" and pl and pl.Events then
+		for _, ev in ipairs(pl.Events) do
+			if ev.Type == "CommanderDamaged" and ev.Player == 2 then finisher = ev end
+		end
+	end
+end
+local celestialLane3 = finalMatch and finalMatch.State.Players[1].Lanes[3]
+check("tutorial ends on the Celestial's hit (Selene to 0)", done and done.Won and finisher and finisher.HP <= 0
+	and finisher.Lane == 3 and celestialLane3 and celestialLane3.CardId == "CEL-04",
+	finisher and ("lane " .. tostring(finisher.Lane) .. ", hit " .. tostring(finisher.Amount) .. ", hp " .. tostring(finisher.HP) .. ", turn " .. tostring(finalMatch.State.Turn)) or "no hit")
 results.tutorialTexts = table.concat(texts, "\n---\n")
 data = PlayerData.Get(nik)
 check("tutorial marked done (not skipped)", data.Onboarding.TutorialDone and not data.Onboarding.TutorialSkipped)

@@ -11,7 +11,11 @@
 	    false, message    -- it was refused; nothing changed
 
 	Config: BattleEngine.new({ Decks = { deck1, deck2 }, FirstPlayer?, Seed?, Mulligan? })
-	    Scripted = { [seat] = { HP?, StartingEnergy?, HandSize?, CelestialDiscount? } }
+	    Scripted = { [seat] = { HP?, StartingEnergy?, HandSize?, CelestialDiscount?,
+	                            UnitLanes? = { lanes unit cards may be played in },
+	                            CelestialLanes? = { lanes the Celestial may be summoned into },
+	                            FinishedByCelestial? = true: this Commander can't drop below 1 HP until the
+	                              other side's Celestial hits it, and that hit always finishes it } }
 	    makes a scripted match (the tutorial): decks aren't checked or shuffled
 	    (cards are drawn in the listed order) and nobody gets the Spark.
 
@@ -140,6 +144,9 @@ function BattleEngine.new(config)
 			HP = scripted.HP or Rules.CommanderHP,
 			MaxEnergy = (scripted.StartingEnergy or Rules.StartingEnergy) - 1, -- goes up by 1 when the first turn starts
 			CelestialDiscount = scripted.CelestialDiscount or 0,
+			UnitLanes = scripted.UnitLanes,                  -- (the tutorial keeps a lane free for the Celestial)
+			CelestialLanes = scripted.CelestialLanes,        -- (...and summons it there)
+			FinishedByCelestial = scripted.FinishedByCelestial, -- (the tutorial ends on the Celestial's hit)
 			Energy = 0,
 			Deck = deck,
 			Hand = {},
@@ -1117,6 +1124,9 @@ function Battle:PlayCard(seat, handIndex, options)
 			if player.Lanes[lane] then
 				return false, "That lane is taken."
 			end
+			if player.UnitLanes and not table.find(player.UnitLanes, lane) then
+				return false, "Keep that lane open for your Celestial."
+			end
 			table.remove(player.Hand, handIndex)
 			player.Energy = player.Energy - card.EnergyCost
 			payHP()
@@ -1178,6 +1188,9 @@ function Battle:SummonCelestial(seat, lane)
 		if player.Lanes[lane] then
 			return false, "That lane is taken."
 		end
+		if player.CelestialLanes and not table.find(player.CelestialLanes, lane) then
+			return false, ("Summon it in lane %d."):format(player.CelestialLanes[1])
+		end
 		local cost = self:GetCelestialCost(seat)
 		if cost > player.Energy then
 			return false, ("Not enough energy (needs %d)."):format(cost)
@@ -1236,6 +1249,20 @@ function Battle:UseSpark(seat)
 	end)
 end
 
+-- The tutorial's scripted finish (FinishedByCelestial): the Commander can't
+-- drop below 1 HP until the other side's Celestial hits it, and that hit
+-- always finishes it. Returns the damage to actually deal.
+function Battle:_commanderDamage(targetSeat, amount, attacker)
+	local target = self.Players[targetSeat]
+	if not target.FinishedByCelestial or amount <= 0 then
+		return amount
+	end
+	if attacker and attacker.IsCelestial then
+		return math.max(amount, target.HP)
+	end
+	return math.max(0, math.min(amount, target.HP - 1))
+end
+
 function Battle:EndTurn(seat)
 	return self:_act(seat, function()
 		local me = self.Players[seat]
@@ -1252,6 +1279,7 @@ function Battle:EndTurn(seat)
 			if ctx.Removed or me.Lanes[lane] ~= attacker or attacker.HP <= 0 then
 				return
 			end
+			amount = self:_commanderDamage(other(seat), amount, attacker)
 			enemy.HP = enemy.HP - amount
 			self:_emit({ Type = "CommanderDamaged", Player = other(seat), Lane = lane,
 				Attacker = attacker.Uid, Amount = amount, HP = enemy.HP, Streak = streak or nil })
@@ -1297,7 +1325,7 @@ function Battle:EndTurn(seat)
 					self:_damageUnit(attacker, defendPower)
 					-- Overflow: damage beyond what the defender could take hits the Commander
 					if Rules.Overflow and not shielded and defender.HP < 0 then
-						local excess = -defender.HP
+						local excess = self:_commanderDamage(other(seat), -defender.HP, attacker)
 						enemy.HP = enemy.HP - excess
 						self:_emit({ Type = "CommanderDamaged", Player = other(seat), Lane = lane,
 							Attacker = attacker.Uid, Amount = excess, HP = enemy.HP, Overflow = true })
@@ -1350,7 +1378,7 @@ function Battle:EndTurn(seat)
 		self:_checkWinner()
 		local round = math.ceil(self.Turn / 2)
 		if not self.Winner and Rules.StormStartRound and round >= Rules.StormStartRound then
-			local amount = round - Rules.StormStartRound + 1
+			local amount = self:_commanderDamage(seat, round - Rules.StormStartRound + 1, nil)
 			me.HP = me.HP - amount
 			self:_emit({ Type = "StormDamage", Player = seat, Amount = amount, HP = me.HP })
 		end

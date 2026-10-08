@@ -100,11 +100,19 @@ check("starter browser opens as the welcome screen", starterGui and starterGui.E
 results.starterWelcome = starterGui and dump(starterGui, 1600, 900)
 -- look at a faction without a deck yet
 if starterGui then
+	check("welcome shows the 5 Commanders", #(function()
+		local t = {} for _, d in ipairs(starterGui:GetDescendants()) do if d.Name == "CommanderCard" then table.insert(t, d) end end return t end)() == 5)
+	check("welcome hides Close (pick a deck first)", not starterGui:FindFirstChild("CloseStarters", true).Visible)
 	local tab = starterGui:FindFirstChild("Faction_Nebula", true)
 	if tab then tab.Activated:Fire() M.run(0.5) end
+	check("tapping a Commander picks it", starterGui:FindFirstChild("ClaimStarter", true).Text:find("Seraphine") ~= nil,
+		starterGui:FindFirstChild("ClaimStarter", true).Text)
+	starterGui:FindFirstChild("SeeFullDeck", true).Activated:Fire() M.run(0.5)
 	results.starterNebula = dump(starterGui, 1600, 900)
-	check("Nebula tab shows its starter deck", starterGui:FindFirstChild("DeckList", true) ~= nil
+	check("See the full deck shows the Nebula list", starterGui:FindFirstChild("DeckList", true) ~= nil
 		and starterGui:FindFirstChild("ComingSoon", true) == nil)
+	starterGui:FindFirstChild("CloseStarters", true).Activated:Fire() M.run(0.5)
+	check("Back returns to the 5 Commanders", starterGui.Enabled and starterGui:FindFirstChild("CommanderRow", true) ~= nil)
 	local solarTab = starterGui:FindFirstChild("Faction_Solar", true)
 	if solarTab then solarTab.Activated:Fire() M.run(0.5) end
 	local claim = starterGui:FindFirstChild("ClaimStarter", true)

@@ -98,8 +98,10 @@ end
 local summary = nil
 local selected = FactionInfo.Order[1]
 local welcomeMode = false -- true for a brand-new player (no starter yet)
+local welcomeDetail = false -- (welcome) looking at one deck's full list instead of the 5 Commanders
 local message = ""
 local render
+local claimSelected
 
 ---------------------------------------------------------------------
 -- Screen
@@ -196,8 +198,103 @@ local function ownedStarter(name)
 	return summary and summary.OwnedStarters and summary.OwnedStarters[name] == true
 end
 
+-- Takes the selected starter deck (free for the first one)
+claimSelected = function()
+	local ok, result = shopRequest:InvokeServer("ClaimStarter", { Deck = selected })
+	if ok then
+		local wasWelcome = welcomeMode
+		welcomeMode = false
+		welcomeDetail = false
+		message = ("The %s starter deck is yours! Try it at any play table."):format(selected)
+		if wasWelcome then
+			-- a brand-new player's first deck: close so the guide can show what's next
+			task.delay(1.5, function()
+				gui.Enabled = false
+			end)
+		end
+	else
+		message = result
+	end
+	render()
+end
+
+-- The welcome screen for brand-new players: the five Commanders side by side,
+-- each with its faction and one line about it. Tap one, then start.
+local function renderWelcome()
+	title.Text = "Welcome! Pick your Commander. Your first deck is free."
+	closeButton.Visible = false
+	local row = make("Frame", { Name = "CommanderRow", Size = UDim2.fromScale(1, 0.78), BackgroundTransparency = 1 }, body)
+	local count = #FactionInfo.Order
+	for i, faction in ipairs(FactionInfo.Order) do
+		local info = FactionInfo.Get(faction)
+		local starter = CardDatabase.StarterDecks[faction]
+		local color = CardVisuals.FactionColors[faction] or PANEL
+		local chosen = faction == selected
+		local tile = make("TextButton", {
+			Name = "Faction_" .. faction,
+			Text = "",
+			AutoButtonColor = false,
+			Position = UDim2.new((i - 1) / count, 6, 0, 0),
+			Size = UDim2.new(1 / count, -12, 1, 0),
+			BackgroundColor3 = chosen and color or PANEL,
+			BackgroundTransparency = chosen and 0.55 or 0.25,
+		}, row)
+		make("UICorner", { CornerRadius = UDim.new(0, 12) }, tile)
+		make("UIStroke", { Color = chosen and GOLD or color, Thickness = chosen and 4 or 1.5,
+			Transparency = chosen and 0 or 0.4 }, tile)
+		local holder = make("Frame", {
+			Name = "CommanderCard",
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0, 10),
+			Size = UDim2.new(0.92, 0, 0.72, 0),
+			BackgroundTransparency = 1,
+		}, tile)
+		make("UIAspectRatioConstraint", { AspectRatio = CARD_ASPECT }, holder)
+		CardVisuals.Draw(holder, starter.Commander, {})
+		label(tile, "FactionName", UDim2.new(0.05, 0, 0.66, 0), UDim2.new(0.9, 0, 0.09, 0), faction, 26,
+			{ TextColor3 = chosen and GOLD or WHITE })
+		label(tile, "FactionTagline", UDim2.new(0.05, 0, 0.76, 0), UDim2.new(0.9, 0, 0.12, 0),
+			info and info.Tagline or "", 17, { Font = Enum.Font.Gotham, TextColor3 = MUTED })
+		tile.Activated:Connect(function()
+			if require(ReplicatedStorage:WaitForChild("LongPress")).Swallowed() then
+				return
+			end
+			selected = faction
+			message = ""
+			render()
+		end)
+		-- right-click (or hold on a phone) to see the Commander up close
+		tile.MouseButton2Click:Connect(function()
+			showZoom(starter.Commander)
+		end)
+		require(ReplicatedStorage:WaitForChild("LongPress")).Attach(tile, function()
+			showZoom(starter.Commander)
+		end)
+	end
+	local commander = CardDatabase.GetCard(CardDatabase.StarterDecks[selected].Commander)
+	local start = button(body, "ClaimStarter", ("Start with %s"):format(commander and commander.Name or selected),
+		UDim2.new(0.25, 0, 0.82, 0), UDim2.new(0.5, 0, 0.1, 0), GREEN)
+	start.Activated:Connect(claimSelected)
+	local details = button(body, "SeeFullDeck", "See the full deck", UDim2.new(0.77, 0, 0.83, 0),
+		UDim2.new(0.21, 0, 0.08, 0), PANEL)
+	details.Activated:Connect(function()
+		welcomeDetail = true
+		render()
+	end)
+	label(body, "StarterMessage", UDim2.new(0, 0, 0.93, 0), UDim2.new(1, 0, 0.06, 0),
+		message ~= "" and message or "Tap a Commander to choose. You can get the other decks later.", 16,
+		{ TextColor3 = message ~= "" and GOLD or MUTED, Font = Enum.Font.Gotham })
+end
+
 function render()
 	clear(body)
+	if welcomeMode and not welcomeDetail then
+		renderWelcome()
+		return
+	end
+	-- (from the welcome screen's "See the full deck", Close goes back to the five Commanders)
+	closeButton.Visible = true
+	closeButton.Text = (welcomeMode and welcomeDetail) and "Back" or "Close"
 	if welcomeMode then
 		title.Text = "Welcome to the Card Shop! Pick your first deck. It's free."
 	else
@@ -339,21 +436,7 @@ function render()
 		if owned then
 			return
 		end
-		local ok, result = shopRequest:InvokeServer("ClaimStarter", { Deck = selected })
-		if ok then
-			local wasWelcome = welcomeMode
-			welcomeMode = false
-			message = ("The %s starter deck is yours! Try it at any play table."):format(selected)
-			if wasWelcome then
-				-- a brand-new player's first deck: close so the guide can show what's next
-				task.delay(1.5, function()
-					gui.Enabled = false
-				end)
-			end
-		else
-			message = result
-		end
-		render()
+		claimSelected()
 	end)
 end
 
@@ -362,6 +445,7 @@ local function open(faction, isWelcome)
 		selected = faction
 	end
 	welcomeMode = isWelcome or false
+	welcomeDetail = false
 	message = ""
 	gui.Enabled = true
 	pcall(function() ReplicatedStorage.AnalyticsRemotes.Track:FireServer("starter_screen_view", isWelcome and "welcome" or "table") end) -- launch analytics
@@ -369,6 +453,11 @@ local function open(faction, isWelcome)
 end
 
 closeButton.Activated:Connect(function()
+	if welcomeMode and welcomeDetail then
+		welcomeDetail = false
+		render()
+		return
+	end
 	gui.Enabled = false
 	zoom.Visible = false
 end)

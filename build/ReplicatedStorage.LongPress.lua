@@ -43,7 +43,7 @@ function LongPress.Attach(button, onHold)
 			end
 		end)
 		task.delay(LongPress.HoldSeconds, function()
-			if holding and button.Parent then
+			if holding then -- (even if the screen redrew that card meanwhile: the card is the same)
 				held = true
 				swallowUntil = math.huge -- until the finger lifts
 				task.delay(3, function()

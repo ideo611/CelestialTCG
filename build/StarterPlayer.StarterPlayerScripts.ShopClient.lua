@@ -1582,6 +1582,17 @@ end)
 make("BindableEvent", { Name = "OpenShop" }, gui).Event:Connect(function(tab)
 	openShop(tab)
 end)
+-- ...and open a free (launch gift) box straight away: ShopGui.OpenGiftBox:Fire(packTypeId)
+make("BindableEvent", { Name = "OpenGiftBox" }, gui).Event:Connect(function(packTypeId)
+	openShop("Boxes")
+	local ok, result = ask("OpenBox", { PackType = packTypeId })
+	if ok then
+		startBox(result)
+	else
+		message = result
+		render()
+	end
+end)
 
 ---------------------------------------------------------------------
 -- The Starter Offer pop-up: after a match (the server decides when), once

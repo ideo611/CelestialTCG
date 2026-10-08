@@ -194,18 +194,27 @@ local firstMatch = make("Frame", {
 	Name = "FirstMatchOffer",
 	AnchorPoint = Vector2.new(0.5, 0),
 	Position = UDim2.fromScale(0.5, 0.1),
-	Size = UDim2.fromScale(0.52, 0.12),
+	Size = UDim2.fromScale(0.56, 0.22),
 	BackgroundColor3 = PANEL,
 	BackgroundTransparency = 0.05,
 	Visible = false,
 }, gui)
-make("UISizeConstraint", { MinSize = Vector2.new(320, 80) }, firstMatch)
+make("UISizeConstraint", { MinSize = Vector2.new(340, 150) }, firstMatch)
 make("UICorner", { CornerRadius = UDim.new(0, 12) }, firstMatch)
 UiTheme.Panel(firstMatch)
-text(firstMatch, "FirstMatchText", UDim2.fromScale(0.03, 0.1), UDim2.fromScale(0.6, 0.8),
+-- row 1: the first match (or Skip, to look around on your own)
+text(firstMatch, "FirstMatchText", UDim2.fromScale(0.04, 0.08), UDim2.fromScale(0.5, 0.38),
 	"NEXT: play your first match against the Practice Bot!", { TextXAlignment = Enum.TextXAlignment.Left })
-local playFirstButton = button(firstMatch, "PlayFirstMatch", "Play now", UDim2.fromScale(0.66, 0.15),
-	UDim2.fromScale(0.31, 0.7))
+local playFirstButton = button(firstMatch, "PlayFirstMatch", "Play now", UDim2.fromScale(0.56, 0.1),
+	UDim2.fromScale(0.25, 0.34))
+local firstMatchParts = {
+	Skip = button(firstMatch, "SkipFirstMatch", "Skip", UDim2.fromScale(0.83, 0.1), UDim2.fromScale(0.13, 0.34), GREY),
+}
+-- row 2: their free launch-gift Booster Box, if they have one waiting
+firstMatchParts.BoxText = text(firstMatch, "FreeBoxText", UDim2.fromScale(0.04, 0.56), UDim2.fromScale(0.5, 0.34),
+	"", { Font = Enum.Font.Gotham, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = GOLD })
+firstMatchParts.Box = button(firstMatch, "OpenFreeBox", "Open my free box", UDim2.fromScale(0.56, 0.56),
+	UDim2.fromScale(0.4, 0.34), Color3.fromRGB(190, 140, 40))
 
 ---------------------------------------------------------------------
 -- After every match: result, coins, progress to the next pack, what next
@@ -567,8 +576,24 @@ local function refresh()
 	local tutorialDone = summary and summary.TutorialDone
 	offer.Visible = not busy and ownsStarter(summary) and not tutorialDone and not state.OfferDismissed
 		and not payoff.Visible
+	local shop = playerGui:FindFirstChild("ShopGui")
 	firstMatch.Visible = not busy and not offer.Visible and not payoff.Visible and ownsStarter(summary)
 		and (tutorialDone or state.OfferDismissed) and (summary.MatchesPlayed or 0) == 0
+		and not state.FirstMatchSkipped and not (shop and shop.Enabled)
+	-- the free box row, while they have one (the launch gift)
+	local freeBox = nil
+	for packTypeId, count in pairs(summary and summary.FactionBoxes or {}) do
+		if count > 0 then
+			freeBox = packTypeId
+		end
+	end
+	state.FreeBox = freeBox
+	firstMatchParts.Box.Visible = freeBox ~= nil
+	firstMatchParts.BoxText.Visible = freeBox ~= nil
+	if freeBox then
+		firstMatchParts.BoxText.Text = ("Or open your FREE %s Booster Box (12 packs)!"):format(freeBox)
+	end
+	firstMatch.Size = freeBox and UDim2.fromScale(0.56, 0.22) or UDim2.fromScale(0.56, 0.12)
 	playButton.Visible = not state.InBattle and ownsStarter(summary)
 	howButton.Visible = not state.InBattle and ownsStarter(summary)
 	firstWinHint.Visible = not state.InBattle and summary ~= nil and summary.FirstWinAvailable == true
@@ -617,6 +642,20 @@ skipTutorialButton.Activated:Connect(function()
 	refresh()
 end)
 playFirstButton.Activated:Connect(startPractice)
+firstMatchParts.Skip.Activated:Connect(function()
+	-- they'd rather look around first (the Play vs Bot button stays in the side column)
+	state.FirstMatchSkipped = true
+	pcall(function() ReplicatedStorage.AnalyticsRemotes.Track:FireServer("first_match_skipped") end)
+	refresh()
+end)
+firstMatchParts.Box.Activated:Connect(function()
+	local shop = playerGui:FindFirstChild("ShopGui")
+	local open = shop and shop:FindFirstChild("OpenGiftBox")
+	if open and state.FreeBox then
+		open:Fire(state.FreeBox)
+	end
+	refresh()
+end)
 playButton.Activated:Connect(startPractice)
 howButton.Activated:Connect(function()
 	-- the rulebook; its "Replay tutorial" button starts the tutorial again

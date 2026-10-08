@@ -185,6 +185,23 @@ M.run(12)
 results.dbg = tostring(PlayerData.GetSummary(nik).TutorialDone) .. " battle=" .. tostring(pg.BattleGui.Enabled)
 local nextStep = guide and guide:FindFirstChild("FirstMatchOffer", true)
 check("after the tutorial: 'play your first match' shows", nextStep and nextStep.Visible)
+check("after the tutorial: Skip is offered", guide:FindFirstChild("SkipFirstMatch", true).Visible)
+local freeBoxB = guide:FindFirstChild("OpenFreeBox", true)
+check("after the tutorial: the free Solar box can be opened from here", freeBoxB and freeBoxB.Visible
+	and guide:FindFirstChild("FreeBoxText", true).Text:find("Solar") ~= nil, guide:FindFirstChild("FreeBoxText", true).Text)
+results.firstMatchBanner = DUMP(guide, 1600, 900)
+-- open it: the shop opens straight into the box
+freeBoxB.Activated:Fire() M.run(2)
+local shopG = pg:FindFirstChild("ShopGui")
+check("free box button opens the box", shopG and shopG.Enabled and shopG:FindFirstChild("BoxOpening", true).Visible)
+check("the free box is used up", (PlayerData.Get(nik).FactionBoxes.Solar or 0) == 0)
+check("banner hides while the shop is open", not nextStep.Visible)
+shopG:FindFirstChild("BoxOpening", true).Visible = false
+shopG.Enabled = false M.run(1.5)
+check("banner returns without the box row", nextStep.Visible and not freeBoxB.Visible)
+-- Skip hides it for this visit
+guide:FindFirstChild("SkipFirstMatch", true).Activated:Fire() M.run(1.2)
+check("Skip hides the banner", not nextStep.Visible)
 
 -- 4. off-table practice from the guide button
 before = #M.remoteLog
@@ -326,7 +343,7 @@ def to_py(t):
             return [to_py(t[k]) for k in sorted(keys)]
         return {k: to_py(v) for k, v in t.items()}
     return t
-for nm in ("inspectDump", "guideDump"):
+for nm in ("inspectDump", "guideDump", "firstMatchBanner"):
     if out[nm]:
         render(to_py(out[nm]), 1600, 900, OUTD + "/" + nm + ".png")
 for k in ("summaryTitle", "summaryBar", "inspectInfo", "dbg", "tutorialText", "tutorialText2", "payoffText", "timerText"):

@@ -339,6 +339,53 @@ check("invite window shows progress", inviteGui and inviteGui:FindFirstChild("In
 	inviteGui and inviteGui:FindFirstChild("InviteStatus", true).Text)
 SHOTS.invite = DUMP(inviteGui, 1600, 900)
 
+-- 11. the Starter Offer: pops up after a match, once a visit; one purchase per account
+do
+	local SO = EconomyConfig.Products.StarterOffer
+	local d = PlayerData.Get(nik)
+	d.StarterOfferBought = false
+	d.StarterOfferPopups = 0
+	d.Stats.Wins = math.max(d.Stats.Wins, 1)
+	if nik.PlayerGui:FindFirstChild("ShopGui") then nik.PlayerGui.ShopGui.Enabled = false end
+	local _, list = shop("GetProducts")
+	check("Starter Offer is first in Tickets & Boxes", list and list.Products[1].Key == "StarterOffer" and list.Products[1].Robux == SO.Robux,
+		list and list.Products[1].Key)
+	PlayerData.OfferStarter(nik)
+	M.run(3)
+	local og = nik.PlayerGui:FindFirstChild("StarterOfferGui")
+	check("Starter Offer pops up after a match", og and og.Enabled and og:FindFirstChild("OfferBuy", true).Text:find(tostring(SO.Robux)) ~= nil,
+		og and og:FindFirstChild("OfferBuy", true).Text)
+	SHOTS.starterOffer = DUMP(og, 1600, 900)
+	og:FindFirstChild("OfferLater", true).Activated:Fire() M.run(1)
+	check("No thanks closes it", not og.Enabled)
+	PlayerData.OfferStarter(nik) M.run(2)
+	check("only once per visit", not og.Enabled and d.StarterOfferPopups == 1, d.StarterOfferPopups)
+	local okB = shop("BuyProduct", { Product = "StarterOffer" })
+	check("Starter Offer can be bought", okB == true)
+	local before = d.Tickets
+	local dec = MPS.ProcessReceipt({ PlayerId = 101, ProductId = SO.ProductId, PurchaseId = "rcpt-starter" })
+	d = PlayerData.Get(nik)
+	check("Starter Offer grants tickets + the Founder's playmat", dec == Granted and d.Tickets == before + SO.Tickets
+		and d.OwnedMats[SO.Playmat] == true and d.StarterOfferBought == true)
+	local _, list2 = shop("GetProducts")
+	local stillThere = false
+	for _, p in ipairs(list2.Products) do if p.Key == "StarterOffer" then stillThere = true end end
+	check("bought: it leaves the shop", not stillThere)
+	local okAgain, msgAgain = shop("BuyProduct", { Product = "StarterOffer" })
+	check("bought: can't buy it again", not okAgain and tostring(msgAgain):find("already") ~= nil, msgAgain)
+	d.StarterOfferPopups = 0
+	PlayerData.OfferStarter(nik) M.run(2)
+	check("bought: no more pop-ups", d.StarterOfferPopups == 0)
+	-- restricted regions never see it
+	local restrictedFn2 = PlayerData.IsRestricted
+	PlayerData.IsRestricted = function() return true end
+	d.StarterOfferBought = false
+	local _, list3 = shop("GetProducts")
+	check("restricted regions don't get the offer", list3.Products[1].Key ~= "StarterOffer")
+	PlayerData.IsRestricted = restrictedFn2
+	d.StarterOfferBought = true
+end
+
 -- testing reset (Studio): back to a new player's save, purchase records kept
 local finnData = PlayerData.Get(finn)
 table.insert(finnData.Purchases, { Id = "test-receipt", Product = "Ticket1", Time = os.time() })
@@ -366,7 +413,7 @@ def to_py(t):
             return [to_py(t[k]) for k in sorted(keys)]
         return {k: to_py(v) for k, v in t.items()}
     return t
-for name in ["boxesTab", "boxTopper", "boxAll", "invite"]:
+for name in ["boxesTab", "boxTopper", "boxAll", "invite", "starterOffer"]:
     shot = G.SHOTS[name]
     if shot:
         render(to_py(shot), 1600, 900, OUT + name + ".png")

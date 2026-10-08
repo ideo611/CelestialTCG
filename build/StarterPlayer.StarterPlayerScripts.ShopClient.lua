@@ -1011,6 +1011,8 @@ local function renderPlaymats()
 			text, color = "Use this mat", ACCENT
 		elseif mat.PriceCoins then
 			text, color = ("Buy for %d coins"):format(mat.PriceCoins), GREEN
+		elseif mat.Exclusive then
+			text, color = "Starter Offer exclusive", Color3.fromRGB(190, 140, 40)
 		else
 			text, color = ("Comes with the %s starter"):format(mat.StarterDeck or "?"), GREY
 		end
@@ -1026,6 +1028,9 @@ local function renderPlaymats()
 				local ok, result = ask("BuyMat", { MatId = mat.Id })
 				SoundAssets.Play(ok and "Purchase" or "NotEnough")
 				message = ok and ("You got the " .. result .. " playmat! It's on your table now.") or result
+			elseif mat.Exclusive then
+				tab = "Boxes"
+				message = "This playmat comes with the one-time Starter Offer."
 			else
 				tab = "Starters"
 				message = ("Get the %s starter deck to unlock this playmat."):format(mat.StarterDeck or "?")
@@ -1041,6 +1046,12 @@ end
 local productInfo = nil -- from the server: { Products = { { Key, Name, Robux, Ready } }, Restricted }
 
 local PRODUCT_TEXT = {
+	StarterOffer = (function()
+		local offer = EconomyConfig.Products.StarterOffer
+		local mat = offer and offer.Playmat and Playmats.Get(offer.Playmat)
+		return ("ONE TIME ONLY: %d Booster Pack Tickets%s. Our best deal, for your first purchase."):format(
+			offer and offer.Tickets or 0, mat and (" + the exclusive " .. mat.Name .. " playmat") or "")
+	end)(),
 	Ticket1 = "Opens any booster. No daily limit, never expires.",
 	Ticket5 = "Five tickets: open five boosters of your choice.",
 	BoosterBox = (function()
@@ -1299,6 +1310,9 @@ local function renderBoxes()
 		}, content)
 		make("UICorner", { CornerRadius = UDim.new(0, 12) }, cell)
 		UiTheme.Panel(cell)
+		if product.Key == "StarterOffer" then
+			make("UIStroke", { Name = "OfferGlow", Color = GOLD, Thickness = 3 }, cell)
+		end
 		UiTheme.Title(label(cell, "ProductName", UDim2.fromScale(0.06, 0.06), UDim2.fromScale(0.88, 0.14), product.Name, 26))
 		label(cell, "ProductText", UDim2.fromScale(0.08, 0.24), UDim2.fromScale(0.84, 0.44), PRODUCT_TEXT[product.Key] or "", 18,
 			{ Font = Enum.Font.Gotham, TextYAlignment = Enum.TextYAlignment.Top })
@@ -1569,12 +1583,113 @@ make("BindableEvent", { Name = "OpenShop" }, gui).Event:Connect(function(tab)
 	openShop(tab)
 end)
 
+---------------------------------------------------------------------
+-- The Starter Offer pop-up: after a match (the server decides when), once
+-- you're back from the battle screen and the match summary
+---------------------------------------------------------------------
+local starterOfferGui
+local showStarterOffer
+do
+	local offerGui = make("ScreenGui", { Name = "StarterOfferGui", ResetOnSpawn = false, IgnoreGuiInset = true,
+		DisplayOrder = 7, Enabled = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling }, player.PlayerGui)
+	starterOfferGui = offerGui
+	local dim = make("TextButton", { Name = "Dim", Text = "", AutoButtonColor = false, Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.45 }, offerGui)
+	dim:SetAttribute("NoTheme", true)
+	local area = make("Frame", { Name = "Area", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) }, offerGui)
+	UiTheme.FitScreen(area, 720, 460)
+	local window = make("Frame", { Name = "OfferWindow", AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(620, 400), BackgroundColor3 = PANEL }, area)
+	make("UICorner", { CornerRadius = UDim.new(0, 14) }, window)
+	UiTheme.Panel(window)
+	make("UIStroke", { Color = GOLD, Thickness = 3 }, window)
+	UiTheme.Title(label(window, "OfferTitle", UDim2.new(0, 24, 0, 14), UDim2.new(1, -48, 0, 44), "Starter Offer", 34))
+	label(window, "OfferTag", UDim2.new(0, 24, 0, 58), UDim2.new(1, -48, 0, 24), "ONE TIME ONLY", 18,
+		{ TextColor3 = GOLD })
+	local preview = make("Frame", { Name = "OfferMat", Position = UDim2.new(0, 24, 0, 96), Size = UDim2.new(0, 250, 0, 160) }, window)
+	make("UICorner", { CornerRadius = UDim.new(0, 8) }, preview)
+	local details = label(window, "OfferDetails", UDim2.new(0, 292, 0, 96), UDim2.new(1, -316, 0, 160), "", 19,
+		{ Font = Enum.Font.Gotham, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top })
+	local buy = button(window, "OfferBuy", "Get it", UDim2.new(0, 24, 1, -88), UDim2.new(0.6, -24, 0, 60), GREEN)
+	local later = button(window, "OfferLater", "No thanks", UDim2.new(0.6, 12, 1, -88), UDim2.new(0.4, -36, 0, 60), GREY)
+	local note = label(window, "OfferNote", UDim2.new(0, 24, 1, -24), UDim2.new(1, -48, 0, 20), "", 14,
+		{ Font = Enum.Font.Gotham, TextColor3 = Color3.fromRGB(255, 190, 150) })
+
+	local function close(reason)
+		if offerGui.Enabled and reason then
+			pcall(function()
+				ReplicatedStorage.AnalyticsRemotes.Track:FireServer("starter_offer_dismissed", reason)
+			end)
+		end
+		offerGui.Enabled = false
+	end
+	later.Activated:Connect(function()
+		close("no_thanks")
+	end)
+	dim.Activated:Connect(function()
+		close("outside")
+	end)
+	buy.Activated:Connect(function()
+		local ok, result = ask("BuyProduct", { Product = "StarterOffer", From = "popup" })
+		if not ok then
+			note.Text = tostring(result)
+		end
+	end)
+
+	local function busy()
+		local battle = player.PlayerGui:FindFirstChild("BattleGui")
+		local guide = player.PlayerGui:FindFirstChild("GuideGui")
+		local summary = guide and guide:FindFirstChild("MatchSummary", true)
+		return (battle and battle.Enabled) or (summary and summary.Visible) or gui.Enabled
+	end
+
+	showStarterOffer = function(payload)
+		-- wait until they're back in the world (up to a minute)
+		local waited = 0
+		while busy() and waited < 60 do
+			task.wait(0.5)
+			waited = waited + 0.5
+		end
+		task.wait(1)
+		if busy() then
+			return
+		end
+		local offer = EconomyConfig.Products.StarterOffer
+		local mat = payload.Playmat and Playmats.Get(payload.Playmat)
+		clear(preview)
+		if mat then
+			Playmats.Draw(preview, mat.Id, 0)
+		end
+		local lines = { ("• %d Booster Pack Tickets (open any booster)"):format(payload.Tickets or offer.Tickets) }
+		if mat then
+			table.insert(lines, ("• The exclusive %s playmat (only from this offer)"):format(mat.Name))
+		end
+		table.insert(lines, "")
+		table.insert(lines, ("One ticket alone is R$ %d."):format(EconomyConfig.Products.Ticket1.Robux))
+		details.Text = table.concat(lines, "\n")
+		buy.Text = ("Get it for R$ %d"):format(payload.Robux or offer.Robux)
+		note.Text = ""
+		offerGui.Enabled = true
+	end
+end
+
 shopEvent.OnClientEvent:Connect(function(payload)
 	if payload.Kind == "OpenShop" then
 		openShop(payload.Tab)
 	elseif payload.Kind == "Announcement" then
 		showToast(payload.Text, payload.Tier)
+	elseif payload.Kind == "StarterOffer" then
+		if showStarterOffer then
+			task.spawn(showStarterOffer, payload)
+		end
 	elseif payload.Kind == "PurchaseDone" then
+		productInfo = nil -- (the Starter Offer leaves the list once it's bought)
+		if starterOfferGui then
+			starterOfferGui.Enabled = false
+		end
+		if gui.Enabled then
+			render()
+		end
 		SoundAssets.Play("Purchase")
 		showToast(("Thank you! %s added."):format(payload.Name or "Your purchase"), "Legendary")
 	end

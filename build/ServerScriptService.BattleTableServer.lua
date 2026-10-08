@@ -522,6 +522,9 @@ local function createTable(index, position, parent, options)
 						if played == 1 then
 							Analytics.Onboarding(occupant, "first_match_completed", vsBot and "bot" or "pvp")
 						end
+						if PlayerData.OfferStarter then
+							task.spawn(PlayerData.OfferStarter, occupant) -- (the Starter Offer, if it's due)
+						end
 					end
 				end
 				local series = match.Series

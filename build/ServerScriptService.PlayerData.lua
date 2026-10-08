@@ -110,6 +110,8 @@ local function defaultData()
 		CoinPacksDay = 0,       -- the UTC day CoinPacksToday belongs to
 		CoinPacksToday = 0,     -- packs bought with coins today (limited per day)
 		Purchases = {},         -- Robux purchases already granted: list of { Id, Product, Time }
+		StarterOfferBought = false, -- the one-time Starter Offer
+		StarterOfferPopups = 0,     -- times it popped up on its own (EconomyConfig.StarterOffer.MaxPopups)
 		Settings = {            -- battle screen settings, kept between visits
 			AnimSpeed = 1,      -- 1 Normal, 2 Fast, 0 Off
 			Sound = true,
@@ -973,6 +975,13 @@ function PlayerData.GrantPurchase(player, purchaseId, productKey)
 	end
 	data.Tickets = (data.Tickets or 0) + (product.Tickets or 0)
 	data.SealedBoxes = (data.SealedBoxes or 0) + (product.Boxes or 0)
+	data.Coins = data.Coins + (product.Coins or 0)
+	if product.Playmat then
+		data.OwnedMats[product.Playmat] = true
+	end
+	if product.OncePerAccount and productKey == "StarterOffer" then
+		data.StarterOfferBought = true
+	end
 	data.RobuxSpent = (data.RobuxSpent or 0) + (product.Robux or 0)
 	table.insert(data.Purchases, { Id = purchaseId, Product = productKey, Time = os.time() })
 	-- forget ids only once they're old (Roblox never re-sends a confirmed purchase)
@@ -1548,6 +1557,7 @@ function PlayerData.GetSummary(player)
 		SealedBoxes = data.SealedBoxes or 0,
 		FactionBoxes = data.FactionBoxes or {},
 		CoinPacksLeft = PlayerData.CoinPacksLeft(data),
+		StarterOfferBought = data.StarterOfferBought == true,
 		CoinPacksPerDay = EconomyConfig.DailyCoinPacks,
 	}
 end

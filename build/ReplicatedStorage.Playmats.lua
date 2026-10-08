@@ -88,6 +88,15 @@ Playmats.List = {
 		PriceCoins = 400,
 		StarterDeck = "Void",
 	},
+	{
+		Id = "MAT-FOUNDER",
+		Name = "Founder's Crown",
+		Description = "Only from the one-time Starter Offer. A badge of the game's first players.",
+		Image = nil, -- (upload art, then paste the Asset ID here; until then a gold-and-violet gradient)
+		Colors = { Color3.fromRGB(120, 84, 20), Color3.fromRGB(34, 12, 56) },
+		Accent = Color3.fromRGB(255, 210, 120),
+		Exclusive = "StarterOffer", -- not sold for coins: comes with this product
+	},
 }
 
 local byId = {}

@@ -68,6 +68,7 @@ local CLIENT_EVENTS = {
 	rulebook_opened = true,
 	invite_opened = true,
 	invite_sent = true,
+	starter_offer_dismissed = true,
 }
 
 local service = nil

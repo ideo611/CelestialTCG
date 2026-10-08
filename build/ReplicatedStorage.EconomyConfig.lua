@@ -61,7 +61,15 @@ EconomyConfig.Products = {
 	Ticket1 = { ProductId = 3716569130, Robux = 160, Tickets = 1, Name = "1 Booster Pack Ticket" },    -- ~$2
 	Ticket5 = { ProductId = 3716569254, Robux = 640, Tickets = 5, Name = "5 Booster Pack Tickets" },   -- ~$8 (20% off)
 	BoosterBox = { ProductId = 3716569336, Robux = 1440, Boxes = 1, Name = "Booster Box" },           -- ~$18 (12 packs + topper, 25% off)
+	-- Starter Offer: once per account, a big deal to make a first purchase easy.
+	-- Shown first in Tickets & Boxes until bought, and offered after a match
+	-- (StarterOffer settings below). ProductId 0 = hidden until it's set up.
+	StarterOffer = { ProductId = 3717214265, Robux = 79, Tickets = 3, Playmat = "MAT-FOUNDER", Name = "Starter Offer",
+		OncePerAccount = true },
 }
+-- When the Starter Offer pops up on its own: after a finished match, from the
+-- player's AfterMatches-th match on, at most MaxPopups times in all (once per visit)
+EconomyConfig.StarterOffer = { AfterMatches = 1, MaxPopups = 3 }
 EconomyConfig.ProductOrder = { "Ticket1", "Ticket5", "BoosterBox" }
 
 function EconomyConfig.ProductKeyForId(productId)

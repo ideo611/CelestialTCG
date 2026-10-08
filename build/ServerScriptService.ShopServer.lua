@@ -25,6 +25,7 @@ local Singles = require(ReplicatedStorage:WaitForChild("Singles"))
 local PlayerData = require(ServerScriptService:WaitForChild("PlayerData"))
 local RateLimit = require(ServerScriptService:WaitForChild("RateLimit"))
 local Building = require(ServerScriptService:WaitForChild("CardShopBuilding"))
+local Analytics = require(ServerScriptService:WaitForChild("Analytics"))
 
 local REVEAL_SECONDS = 0.8      -- time between cards flipping for watchers
 local DISPLAY_AFTER_SECONDS = 6 -- how long the pulls stay up afterwards
@@ -322,10 +323,22 @@ local function priceOf(product)
 	return livePrices[product.ProductId] or product.Robux
 end
 
+-- The Starter Offer can be bought: set up, not bought yet, and allowed in their region
+local function starterOfferOpen(player)
+	local product = EconomyConfig.Products.StarterOffer
+	local data = PlayerData.Get(player)
+	return product ~= nil and product.ProductId ~= 0 and data ~= nil and not data.StarterOfferBought
+		and not PlayerData.IsRestricted(player)
+end
+
 function handlers.GetProducts(player)
 	local restricted = PlayerData.IsRestricted(player)
 	local list = {}
-	for _, key in ipairs(EconomyConfig.ProductOrder) do
+	local order = table.clone(EconomyConfig.ProductOrder)
+	if starterOfferOpen(player) then
+		table.insert(order, 1, "StarterOffer") -- first in line until it's bought
+	end
+	for _, key in ipairs(order) do
 		local product = EconomyConfig.Products[key]
 		table.insert(list, {
 			Key = key,
@@ -348,9 +361,40 @@ function handlers.BuyProduct(player, args)
 	if PlayerData.IsRestricted(player) then
 		return false, "Booster tickets and boxes can't be bought in your region. You can still earn packs by playing."
 	end
+	if product.OncePerAccount then
+		local data = PlayerData.Get(player)
+		if not data or data.StarterOfferBought then
+			return false, "You already have the Starter Offer."
+		end
+		Analytics.Event(player, "starter_offer_clicked", args.From or "shop")
+	end
 	MarketplaceService:PromptProductPurchase(player, product.ProductId)
 	return true
 end
+
+-- After a finished match: the Starter Offer pops up (once a visit, a few times
+-- in all, from the player's EconomyConfig.StarterOffer.AfterMatches-th match on)
+local offeredThisVisit = {}
+PlayerData.OfferStarter = function(player)
+	local settings = EconomyConfig.StarterOffer
+	local data = PlayerData.Get(player)
+	if not settings or not data or offeredThisVisit[player] or not starterOfferOpen(player) then
+		return
+	end
+	local played = data.Stats.Wins + data.Stats.Losses
+	if played < (settings.AfterMatches or 1) or (data.StarterOfferPopups or 0) >= (settings.MaxPopups or 3) then
+		return
+	end
+	offeredThisVisit[player] = true
+	data.StarterOfferPopups = (data.StarterOfferPopups or 0) + 1
+	local product = EconomyConfig.Products.StarterOffer
+	Analytics.Event(player, "starter_offer_shown", tostring(data.StarterOfferPopups))
+	shopEvent:FireClient(player, { Kind = "StarterOffer", Robux = priceOf(product), Tickets = product.Tickets,
+		Playmat = product.Playmat })
+end
+Players.PlayerRemoving:Connect(function(player)
+	offeredThisVisit[player] = nil
+end)
 
 -- The launch gift: tell them (once the screen has had a moment to load)
 PlayerData.GiftGiven = function(player, faction)

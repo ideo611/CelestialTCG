@@ -517,7 +517,7 @@ local function createTable(index, position, parent, options)
 						send(occupant, { Kind = "Reward", Coins = coins, Bonus = bonus or 0, Tickets = tickets or 0,
 							FriendTickets = friendTickets or 0, VsBot = vsBot, Won = won, MatchesPlayed = played })
 						Analytics.Event(occupant, vsBot and "practice_match_completed" or "pvp_match_completed",
-							(won and "won" or "lost") .. (vsBot and ("_" .. string.lower(match.BotDifficulty or "normal")) or ""),
+							(won and "won" or "lost") .. (vsBot and ("_" .. string.lower(match.BotDifficulty or "easy")) or ""),
 							math.floor(duration))
 						if played == 1 then
 							Analytics.Onboarding(occupant, "first_match_completed", vsBot and "bot" or "pvp")
@@ -1000,7 +1000,8 @@ local function createTable(index, position, parent, options)
 			end
 			if match.Seats[otherSeat] == BOT then
 				-- practice bot difficulty (Normal unless they picked Hard)
-				match.BotDifficulty = action.BotDifficulty == "Hard" and "Hard" or "Normal"
+				local wanted = action.BotDifficulty
+				match.BotDifficulty = (wanted == "Hard" or wanted == "Normal") and wanted or "Easy" -- (Easy unless they picked)
 			end
 			if match.Seats[otherSeat] == BOT and not match.Decks[otherSeat] then
 				local order = CardDatabase.StarterDeckOrder

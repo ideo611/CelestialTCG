@@ -591,7 +591,7 @@ local chosenFormat = 1 -- remembered for next time
 local formatButtons = {}
 for i, bestOf in ipairs({ 1, 3, 5 }) do
 	local b = button(pickerFrame, "FormatBo" .. bestOf, "Best of " .. bestOf,
-		UDim2.fromScale(0.305 + (i - 1) * 0.135, 0.17), UDim2.fromScale(0.12, 0.06), TINT.Grey)
+		UDim2.fromScale(0.1 + (i - 1) * 0.125, 0.17), UDim2.fromScale(0.115, 0.06), TINT.Grey)
 	b.ZIndex = 6
 	formatButtons[bestOf] = b
 end
@@ -604,12 +604,12 @@ local formatNote = label(pickerFrame, {
 	Text = "",
 })
 local vsBotPicker = false
--- Practice bot difficulty: Normal (default, easier) or Hard
-local chosenDifficulty = "Normal"
+-- Practice bot difficulty: Easy (default), Normal or Hard
+local chosenDifficulty = "Easy"
 local difficultyButtons = {}
-for i, info in ipairs({ { "Normal", "Normal bot" }, { "Hard", "Hard bot" } }) do
+for i, info in ipairs({ { "Easy", "Easy bot" }, { "Normal", "Normal bot" }, { "Hard", "Hard bot" } }) do
 	local b = button(pickerFrame, "Bot" .. info[1], info[2],
-		UDim2.fromScale(0.73 + (i - 1) * 0.115, 0.17), UDim2.fromScale(0.105, 0.06), TINT.Grey)
+		UDim2.fromScale(0.515 + (i - 1) * 0.13, 0.17), UDim2.fromScale(0.12, 0.06), TINT.Grey)
 	b.ZIndex = 6
 	b.Visible = false
 	difficultyButtons[info[1]] = b
@@ -630,7 +630,8 @@ local function refreshFormat()
 	if vsBotPicker then
 		formatNote.Text = chosenDifficulty == "Hard"
 			and "How many games? Hard bot plans ahead and plays to win."
-			or "How many games? Normal bot is good for learning. Try Hard bot for a challenge."
+			or chosenDifficulty == "Normal" and "How many games? Normal bot plays a fair game. Try Hard for a challenge."
+			or "How many games? Easy bot is great for learning. Try Normal or Hard when you're ready."
 	else
 		local theirs = opponentVote and ("Opponent voted best of " .. opponentVote .. ".")
 			or "Opponent hasn't voted yet."

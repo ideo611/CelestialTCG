@@ -316,7 +316,14 @@ end
 tableModel.Triggered:Fire(nik)
 M.run(1)
 local actions = RS.BattleRemotes.BattleAction
-actions:FireServer({ Kind = "ChooseDeck", Deck = "Solar", BestOf = 1 })
+do
+	local bg = pg:FindFirstChild("BattleGui")
+	local easy, normal, hard = bg and bg:FindFirstChild("BotEasy", true), bg and bg:FindFirstChild("BotNormal", true), bg and bg:FindFirstChild("BotHard", true)
+	check("deck picker offers Easy / Normal / Hard bots", easy and normal and hard and easy.Visible and normal.Visible and hard.Visible)
+	check("Easy bot is picked by default", easy and easy:FindFirstChildOfClass("UIStroke") ~= nil and not hard:FindFirstChildOfClass("UIStroke"))
+	results.picker = bg and dump(bg, 1600, 900)
+end
+actions:FireServer({ Kind = "ChooseDeck", Deck = "Solar", BestOf = 1, BotDifficulty = "Hard" }) -- (Hard: a fuller game for the event checks)
 M.run(2)
 local snapsBefore = 0
 for _, e in ipairs(M.remoteLog) do if e.Remote == "TableUpdate" then snapsBefore = snapsBefore + 1 end end
@@ -586,7 +593,7 @@ print("singles:", res.get("singlesPrices"))
 print("events seen:", res.get("eventKinds"))
 for name, size in [("mulligan", (1600, 900)), ("graveyard", (1600, 900)), ("deckEditor", (1600, 900)), ("deckEditor2", (1600, 900)), ("starterWelcome", (1600, 900)), ("starterNebula", (1600, 900)), ("shopPacks", (1600, 900)),
                    ("shopPicker", (1600, 900)), ("shopReveal", (1600, 900)), ("shopSingles", (1600, 900)),
-                   ("binder", (1600, 900)), ("binder2", (1600, 900)), ("battle", (1600, 900)), ("battle2", (1600, 900)), ("battlePhone", (844, 390)), ("battlePhonePick", (844, 390)), ("deckEditorPhone", (1169, 540)), ("shopPhone", (1169, 540)), ("intro", (1600, 900)), ("rulebook", (1600, 900)), ("rulebook2", (1600, 900)), ("rulebookPhone", (844, 390)), ("tv", (540, 300)), ("tvLive", (420, 240))]:
+                   ("binder", (1600, 900)), ("binder2", (1600, 900)), ("battle", (1600, 900)), ("battle2", (1600, 900)), ("battlePhone", (844, 390)), ("battlePhonePick", (844, 390)), ("deckEditorPhone", (1169, 540)), ("shopPhone", (1169, 540)), ("intro", (1600, 900)), ("picker", (1600, 900)), ("rulebook", (1600, 900)), ("rulebook2", (1600, 900)), ("rulebookPhone", (844, 390)), ("tv", (540, 300)), ("tvLive", (420, 240))]:
     if res.get(name):
         render(res[name], size[0], size[1], f"{OUT}/{name}.png")
 import json

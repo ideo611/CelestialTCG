@@ -293,13 +293,28 @@ end
 -- with energy left over. Still plays its Celestial and Commander ability, so
 -- it shows new players everything the game does.
 ---------------------------------------------------------------------
-BattleBot.Difficulties = { "Normal", "Hard" }
-BattleBot.DefaultDifficulty = "Normal"
-local EASY = {
-	StopChance = 0.12,    -- after each play, chance it just ends its turn
-	AbilityChance = 0.5,  -- chance it uses its Commander ability when it could
-	SloppyTarget = 0.35,  -- chance it aims at a random target instead of the best
+-- Easy (the default) is gentler still: it often stops after a card or two,
+-- rarely uses its ability, aims almost at random, and doesn't always bring
+-- out its Celestial the moment it can.
+BattleBot.Difficulties = { "Easy", "Normal", "Hard" }
+BattleBot.DefaultDifficulty = "Easy"
+local LEVELS = {
+	Normal = {
+		StopChance = 0.12,     -- after each play, chance it just ends its turn
+		AbilityChance = 0.5,   -- chance it uses its Commander ability when it could
+		SloppyTarget = 0.35,   -- chance it aims at a random target instead of the best
+		CelestialChance = 1,   -- chance it summons its Celestial when it can
+		MaxPlays = 20,         -- most cards it plays in a turn
+	},
+	Easy = {
+		StopChance = 0.35,
+		AbilityChance = 0.2,
+		SloppyTarget = 0.8,
+		CelestialChance = 0.5,
+		MaxPlays = 2,
+	},
 }
+local EASY = LEVELS.Normal -- (the level of the turn being played)
 
 local easyRng = Random.new()
 
@@ -333,7 +348,8 @@ local function tryEasyAction(battle, seat, playedSomething)
 	end
 	shuffled(open)
 
-	if not me.StarGate.OnBoard and #open > 0 and me.StarGate.Cost <= me.Energy then
+	if not me.StarGate.OnBoard and #open > 0 and me.StarGate.Cost <= me.Energy
+		and easyRng:NextNumber() < (EASY.CelestialChance or 1) then
 		local ok, events = battle:SummonCelestial(seat, open[1])
 		if ok then
 			return true, events
@@ -383,9 +399,10 @@ local function tryEasyAction(battle, seat, playedSomething)
 	return false
 end
 
-function BattleBot.TakeTurnEasy(battle, seat, onEvents, pause)
+function BattleBot.TakeTurnEasy(battle, seat, onEvents, pause, level)
+	EASY = LEVELS[level or "Normal"] or LEVELS.Normal
 	local played = false
-	for _ = 1, 20 do
+	for _ = 1, EASY.MaxPlays or 20 do
 		if battle.Winner or battle.Current ~= seat then
 			return
 		end
@@ -609,10 +626,10 @@ end
 
 -- Plays out the bot's whole turn.
 -- onEvents(events) is called after every action; pause() runs between actions.
--- difficulty: "Normal" (default practice bot) or "Hard" (the planner)
+-- difficulty: "Easy" (default practice bot), "Normal" or "Hard" (the planner)
 function BattleBot.TakeTurn(battle, seat, onEvents, pause, difficulty)
-	if difficulty == "Normal" then
-		return BattleBot.TakeTurnEasy(battle, seat, onEvents, pause)
+	if difficulty == "Normal" or difficulty == "Easy" then
+		return BattleBot.TakeTurnEasy(battle, seat, onEvents, pause, difficulty)
 	end
 	if not battle.CloneForSearch then
 		return BattleBot.TakeTurnSimple(battle, seat, onEvents, pause)

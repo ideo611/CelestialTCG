@@ -170,9 +170,11 @@ if varroArt then
 		BackgroundTransparency = 1,
 		Image = varroArt,
 		ImageRectOffset = Vector2.new(180, 0),
-		ImageRectSize = Vector2.new(700, 760),
+		ImageRectSize = Vector2.new(700, 620),
 		ScaleType = Enum.ScaleType.Crop,
 	}, offer)
+	-- the box keeps the cut-out's shape, so Crop never trims his head off the top
+	make("UIAspectRatioConstraint", { AspectRatio = 700 / 620 }, portrait)
 	make("UICorner", { CornerRadius = UDim.new(0, 10) }, portrait)
 	make("UIStroke", { Color = GOLD, Thickness = 2, Transparency = 0.2 }, portrait)
 end

@@ -242,19 +242,23 @@ local function renderWelcome()
 		make("UICorner", { CornerRadius = UDim.new(0, 12) }, tile)
 		make("UIStroke", { Color = chosen and GOLD or color, Thickness = chosen and 4 or 1.5,
 			Transparency = chosen and 0 or 0.4 }, tile)
+		-- card, faction name and tagline stacked, so the words always sit right under the card
+		local stack = make("Frame", { Name = "Stack", Position = UDim2.new(0, 8, 0, 10), Size = UDim2.new(1, -16, 1, -16),
+			BackgroundTransparency = 1 }, tile)
+		make("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder,
+			HorizontalAlignment = Enum.HorizontalAlignment.Center }, stack)
 		local holder = make("Frame", {
 			Name = "CommanderCard",
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, 0, 0, 10),
-			Size = UDim2.new(0.92, 0, 0.72, 0),
+			LayoutOrder = 1,
+			Size = UDim2.new(1, 0, 0.74, 0),
 			BackgroundTransparency = 1,
-		}, tile)
+		}, stack)
 		make("UIAspectRatioConstraint", { AspectRatio = CARD_ASPECT }, holder)
 		CardVisuals.Draw(holder, starter.Commander, {})
-		label(tile, "FactionName", UDim2.new(0.05, 0, 0.66, 0), UDim2.new(0.9, 0, 0.09, 0), faction, 26,
-			{ TextColor3 = chosen and GOLD or WHITE })
-		label(tile, "FactionTagline", UDim2.new(0.05, 0, 0.76, 0), UDim2.new(0.9, 0, 0.12, 0),
-			info and info.Tagline or "", 17, { Font = Enum.Font.Gotham, TextColor3 = MUTED })
+		label(stack, "FactionName", UDim2.new(), UDim2.new(1, 0, 0.08, 0), faction, 30,
+			{ TextColor3 = chosen and GOLD or WHITE, LayoutOrder = 2 })
+		label(stack, "FactionTagline", UDim2.new(), UDim2.new(1, 0, 0.11, 0),
+			info and info.Tagline or "", 22, { Font = Enum.Font.Gotham, TextColor3 = MUTED, LayoutOrder = 3 })
 		tile.Activated:Connect(function()
 			if require(ReplicatedStorage:WaitForChild("LongPress")).Swallowed() then
 				return
@@ -273,10 +277,18 @@ local function renderWelcome()
 	end
 	local commander = CardDatabase.GetCard(CardDatabase.StarterDecks[selected].Commander)
 	local start = button(body, "ClaimStarter", ("Start with %s"):format(commander and commander.Name or selected),
-		UDim2.new(0.25, 0, 0.82, 0), UDim2.new(0.5, 0, 0.1, 0), GREEN)
+		UDim2.new(0.31, 0, 0.815, 0), UDim2.new(0.38, 0, 0.105, 0), GREEN)
 	start.Activated:Connect(claimSelected)
-	local details = button(body, "SeeFullDeck", "See the full deck", UDim2.new(0.77, 0, 0.83, 0),
-		UDim2.new(0.21, 0, 0.08, 0), PANEL)
+	local details = button(body, "SeeFullDeck", "See the full deck", UDim2.new(0.74, 0, 0.83, 0),
+		UDim2.new(0.18, 0, 0.075, 0), Color3.fromRGB(70, 70, 120))
+	-- bigger words on these two than the browser's small buttons
+	for _, b in ipairs({ start, details }) do
+		for _, d in ipairs(b:GetDescendants()) do
+			if d:IsA("UITextSizeConstraint") then
+				d.MaxTextSize = b == start and 30 or 24
+			end
+		end
+	end
 	details.Activated:Connect(function()
 		welcomeDetail = true
 		render()

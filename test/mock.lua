@@ -192,6 +192,7 @@ local ENUMS = {
 	LineJoinMode = { "Round", "Bevel", "Miter" },
 	ResamplerMode = { "Default", "Pixelated" },
 	UserInputType = { "MouseButton1", "MouseButton2", "Touch", "Keyboard", "MouseMovement", "MouseWheel", "Gamepad1" },
+	UserInputState = { "Begin", "Change", "End", "Cancel", "None" },
 	AnalyticsCustomFieldKeys = { "CustomField01", "CustomField02", "CustomField03" },
 	ProductPurchaseDecision = { "NotProcessedYet", "PurchaseGranted" },
 	ScrollingDirection = { "X", "Y", "XY" },

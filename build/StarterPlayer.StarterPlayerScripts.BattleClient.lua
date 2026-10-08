@@ -1834,7 +1834,14 @@ function render()
 		cardButton.MouseButton2Click:Connect(function()
 			showInspect({ CardId = cardId })
 		end)
+		-- (touch: hold a card to inspect it, like right-click)
+		require(ReplicatedStorage:WaitForChild("LongPress")).Attach(cardButton, function()
+			showInspect({ CardId = cardId })
+		end)
 		cardButton.Activated:Connect(function()
+			if require(ReplicatedStorage:WaitForChild("LongPress")).Swallowed() then
+				return
+			end
 			if inspectMode then
 				showInspect({ CardId = cardId })
 				return
@@ -3140,7 +3147,11 @@ for _, side in ipairs({ "Enemy", "Self" }) do
 			return false
 		end
 		slots[side][lane].MouseButton2Click:Connect(inspectHere)
+		require(ReplicatedStorage:WaitForChild("LongPress")).Attach(slots[side][lane], inspectHere)
 		slots[side][lane].Activated:Connect(function()
+			if require(ReplicatedStorage:WaitForChild("LongPress")).Swallowed() then
+				return
+			end
 			if inspectMode then
 				if not inspectHere() then
 					inspectMode = false
@@ -3204,10 +3215,21 @@ end
 myGate.MouseButton2Click:Connect(function()
 	inspectGate("Self")
 end)
+-- touch: hold the Star Gates and Commanders to inspect them too
+do
+	local LongPress = require(ReplicatedStorage:WaitForChild("LongPress"))
+	LongPress.Attach(myGate, function() inspectGate("Self") end)
+	LongPress.Attach(enemyGate, function() inspectGate("Enemy") end)
+	LongPress.Attach(myCommander, function() inspectCommander("Self") end)
+	LongPress.Attach(enemyCommander, function() inspectCommander("Enemy") end)
+end
 enemyGate.MouseButton2Click:Connect(function()
 	inspectGate("Enemy")
 end)
 enemyGate.Activated:Connect(function()
+	if require(ReplicatedStorage:WaitForChild("LongPress")).Swallowed() then
+		return
+	end
 	if not inspectGate("Enemy") and inspectMode then
 		inspectMode = false
 		render()
@@ -3220,6 +3242,9 @@ enemyCommander.MouseButton2Click:Connect(function()
 	inspectCommander("Enemy")
 end)
 enemyCommander.Activated:Connect(function()
+	if require(ReplicatedStorage:WaitForChild("LongPress")).Swallowed() then
+		return
+	end
 	inspectCommander("Enemy")
 end)
 
@@ -3234,6 +3259,9 @@ inspectFrame.Activated:Connect(closeInspect)
 inspectClose.Activated:Connect(closeInspect)
 
 myGate.Activated:Connect(function()
+	if require(ReplicatedStorage:WaitForChild("LongPress")).Swallowed() then
+		return
+	end
 	if inspectMode then
 		if not inspectGate("Self") then
 			inspectMode = false
@@ -3257,6 +3285,9 @@ myGate.Activated:Connect(function()
 end)
 
 local function onAbilityClicked()
+	if require(ReplicatedStorage:WaitForChild("LongPress")).Swallowed() then
+		return -- (a long press on your Commander inspects it instead)
+	end
 	if inspectMode then
 		inspectCommander("Self")
 		return

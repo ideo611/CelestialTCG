@@ -372,6 +372,24 @@ for _, e in ipairs(M.remoteLog) do
 end
 check("mulligan sent back one card", sawMull)
 -- picking a hand card on your turn shows it big over the log
+-- touch: holding a hand card inspects it, and lifting the finger doesn't also pick it
+do
+	local hc = battleGui and battleGui:FindFirstChild("HandCard_1", true)
+	if hc then
+		local input = { UserInputType = Enum.UserInputType.Touch, UserInputState = Enum.UserInputState.Begin,
+			Position = Vector2.new(100, 100), Changed = M.Signal.new() }
+		hc.InputBegan:Fire(input)
+		M.run(0.7)
+		local inspect = battleGui:FindFirstChild("Inspect", true)
+		check("touch: holding a card inspects it", inspect and inspect.Visible)
+		input.UserInputState = Enum.UserInputState.End
+		input.Changed:Fire("UserInputState")
+		hc.Activated:Fire() M.run(0.2)
+		local pick = battleGui:FindFirstChild("PickPreview", true)
+		check("touch: the release doesn't also pick the card", not (pick and pick.Visible))
+		battleGui:FindFirstChild("InspectCloseButton", true).Activated:Fire() M.run(0.3)
+	end
+end
 do
 	local shown = false
 	for _ = 1, 4 do

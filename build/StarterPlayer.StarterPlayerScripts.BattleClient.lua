@@ -3393,8 +3393,47 @@ local function onAbilityClicked()
 		or (abilityTarget == "FriendlyUnit" and " Pick one of your units." or " Pick a unit.")
 	selectThing({ Kind = "Ability", Hint = commander.CommanderAbility.Text .. pick })
 end
-abilityButton.Activated:Connect(onAbilityClicked)
-myCommander.Activated:Connect(onAbilityClicked)
+abilityButton.Activated:Connect(function()
+	if not require(ReplicatedStorage:WaitForChild("CardDrag")).Swallowed() then
+		onAbilityClicked()
+	end
+end)
+myCommander.Activated:Connect(function()
+	if not require(ReplicatedStorage:WaitForChild("CardDrag")).Swallowed() then
+		onAbilityClicked()
+	end
+end)
+-- drag the Ability button (or your Commander) onto a unit to use the ability on it
+for _, source in ipairs({ abilityButton, myCommander }) do
+	require(ReplicatedStorage:WaitForChild("CardDrag")).Attach(source, {
+		Layer = root,
+		GhostSize = UDim2.fromOffset(100, 140),
+		CanDrag = function()
+			local mine = current and current.State.Players[current.Seat]
+			if not mine or inspectMode or not isMyTurn() or mine.AbilityUsed
+				or require(ReplicatedStorage:WaitForChild("LongPress")).Swallowed() then
+				return false
+			end
+			local ability = CardDatabase.GetCard(mine.CommanderId).CommanderAbility
+			return ability.Effect.Target ~= nil and ability.EnergyCost <= mine.Energy
+		end,
+		MakeGhost = function(parent)
+			local commanderId = current.State.Players[current.Seat].CommanderId
+			drawCard(parent, commanderId, nil, true, false, finishFor("Self", commanderId))
+		end,
+		OnStart = function()
+			local ability = CardDatabase.GetCard(current.State.Players[current.Seat].CommanderId).CommanderAbility
+			local target = ability.Effect.Target
+			selectThing({ Kind = "Ability", Hint = target == "EnemyUnit" and "Drop it on an enemy unit."
+				or (target == "FriendlyUnit" and "Drop it on one of your units." or "Drop it on a unit.") })
+		end,
+		OnDrop = function(p)
+			if not PICK.DropOnLane(p) then
+				selectThing(nil)
+			end
+		end,
+	})
+end
 
 sparkButton.Activated:Connect(function()
 	if isMyTurn() then

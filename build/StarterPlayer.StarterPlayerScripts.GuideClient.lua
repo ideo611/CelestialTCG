@@ -461,8 +461,9 @@ local pointer = make("TextLabel", {
 	AnchorPoint = Vector2.new(0.4, 0),
 	Size = UDim2.fromOffset(56, 56),
 	Visible = false,
-	ZIndex = 26,
-}, spotlightRoot)
+	ZIndex = 30, -- (straight on the guide screen, above the tutorial box: inside the
+	             -- full-screen spotlight frame it was drawn under the box's buttons)
+}, gui)
 
 local function centerOf(name)
 	local bg = battleGui()
@@ -616,7 +617,7 @@ local STEPS = {
 			local lane = Point.unitLane()
 			return lane and { "AbilityButton", "Slot_Self_" .. lane } or nil
 		end,
-		Title = "USE YOUR POWER", Text = "Tap Ability, then a unit: +2 Power this turn." },
+		Title = "USE YOUR POWER", Text = "Drag Ability onto one of your units (or tap Ability, then the unit): +2 Power this turn." },
 	{ Id = "spend", Kind = "mine", Glow = { "Hand", "EndTurnButton" },
 		Pointer = function()
 			return (not state.StepPlayed and Point.playUnit({ 1, 2 })) or Point.endTurn

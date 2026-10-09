@@ -9,7 +9,8 @@
 	  CardDrag.Attach(button, {
 	      Layer     = the frame the dragged copy is drawn in,
 	      CanDrag   = function() -> true if this card may be dragged right now,
-	      MakeGhost = function(parent) -> a frame drawing the card (sized by us),
+	      MakeGhost = function(parent) -> a frame drawing the card (sized like the
+	                  button, or GhostSize = a UDim2 when the button isn't card-shaped),
 	      OnStart   = function() (the drag began),
 	      OnDrop    = function(point) (released: point = Vector2 in the same
 	                  space as GuiObject.AbsolutePosition),
@@ -96,7 +97,8 @@ function CardDrag.Attach(button, opts)
 					ghost = Instance.new("Frame")
 					ghost.Name = "DraggedCard"
 					ghost.AnchorPoint = Vector2.new(0.5, 0.6)
-					ghost.Size = UDim2.fromOffset(math.max(size.X, 60) * 1.1, math.max(size.Y, 84) * 1.1)
+					ghost.Size = opts.GhostSize
+						or UDim2.fromOffset(math.max(size.X, 60) * 1.1, math.max(size.Y, 84) * 1.1)
 					ghost.BackgroundTransparency = 1
 					ghost.ZIndex = 40
 					ghost.Parent = layer

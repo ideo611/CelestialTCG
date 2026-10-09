@@ -149,10 +149,50 @@ check("the glow doesn't sit inside the hand (it would push the cards aside)",
 local actions = RS.BattleRemotes.BattleAction
 local texts = {}
 local celestialDragTried = false
+local abilityDragTried = false
 local pointedAt = {}
 for turn = 1, 14 do
 	local st = lastPayload("Match", before)
 	if not st or st.State.Winner then break end
+	do
+		local at = guide:FindFirstChild("TutorialTitle", true)
+		if at and at.Text == "USE YOUR POWER" and not abilityDragTried then
+			abilityDragTried = true
+			local ptr = guide:FindFirstChild("TutorialPointer", true)
+			check("ability step: the hand points from Ability to a unit", ptr and ptr.Visible
+				and tostring(ptr:GetAttribute("Target")):sub(1, 10) == "Slot_Self_", tostring(ptr and ptr:GetAttribute("Target")))
+			M.absOverride = {}
+			for side, row in pairs({ Self = 500, Enemy = 200 }) do
+				for lane = 1, 3 do
+					M.absOverride[battleGui:FindFirstChild("Slot_" .. side .. "_" .. lane, true)] =
+						{ Vector2.new(200 * lane, row), Vector2.new(150, 200) }
+				end
+			end
+			local target = tostring(ptr:GetAttribute("Target"))
+			local lane = tonumber(target:sub(-1)) or 1
+			local mark = #M.remoteLog
+			battleGui:FindFirstChild("AbilityButton", true).InputBegan:Fire({ UserInputType = Enum.UserInputType.MouseButton1,
+				Position = Vector2.new(1300, 600), Changed = M.Signal.new() })
+			game:GetService("UserInputService").InputChanged:Fire({ UserInputType = Enum.UserInputType.MouseMovement,
+				Position = Vector2.new(1000, 600) })
+			M.run(0.1)
+			check("ability: a dragged copy follows the pointer", battleGui:FindFirstChild("DraggedCard", true) ~= nil)
+			game:GetService("UserInputService").InputEnded:Fire({ UserInputType = Enum.UserInputType.MouseButton1,
+				Position = Vector2.new(200 * lane + 70, 600) })
+			M.run(1.5)
+			local used = false
+			for k = mark + 1, #M.remoteLog do
+				local e = M.remoteLog[k]
+				if e.Remote == "BattleUpdate" and type(e.Args[1]) == "table" then
+					for _, ev in ipairs(e.Args[1].Events or {}) do
+						if ev.Type == "CommanderAbility" then used = true end
+					end
+				end
+			end
+			M.absOverride = nil
+			check("ability: dragging Ability onto a unit uses it", used)
+		end
+	end
 	local tt = guide:FindFirstChild("TutorialTitle", true)
 	if tt and tt.Text == "SUMMON YOUR CELESTIAL" and not celestialDragTried then
 		celestialDragTried = true
@@ -209,6 +249,7 @@ for turn = 1, 14 do
 	actions:FireServer({ Kind = "EndTurn" })
 	M.run(12)
 end
+check("the ability drag was tried", abilityDragTried)
 check("the hand never points a unit at lane 3 (kept for the Celestial)", pointedAt.BadLane3 == nil, tostring(pointedAt.BadLane3))
 pointedAt.BadLane3 = nil
 do

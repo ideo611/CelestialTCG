@@ -557,6 +557,8 @@ instanceMeta.__index = function(self, key)
 	if child then return child end
 	-- on-screen size/position of GUI objects (a fixed 1600x900 screen in tests)
 	if (key == "AbsoluteSize" or key == "AbsolutePosition") and cls.Size then
+		local o = M.absOverride and M.absOverride[self] -- (tests can place an object on screen)
+		if o then return key == "AbsoluteSize" and o[2] or o[1] end
 		return key == "AbsoluteSize" and Vector2.new(1600, 900) or Vector2.new(0, 0)
 	end
 	error(tostring(key) .. " is not a valid member of " .. rawget(self, "__class") .. " \"" .. tostring(props.Name) .. "\"", 2)

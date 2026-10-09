@@ -467,6 +467,9 @@ local pointer = make("TextLabel", {
 local function centerOf(name)
 	local bg = battleGui()
 	local target = bg and bg.Enabled and bg:FindFirstChild(name, true)
+	if not target then
+		target = gui:FindFirstChild(name, true) -- (the tutorial box's own buttons)
+	end
 	if not (target and target:IsA("GuiObject") and target.Visible) then
 		return nil
 	end
@@ -480,24 +483,83 @@ local function centerOf(name)
 	return pos.X - origin.X + size.X / 2, pos.Y - origin.Y + size.Y / 2
 end
 
+-- What the pointer shows right now, from the match as it is: the first card
+-- they can afford onto an empty lane, a unit for the Ability, End Turn once
+-- they've played something...
+local CardDatabase = require(ReplicatedStorage:WaitForChild("CardDatabase"))
+local Point = {}
+function Point.me()
+	local s = state.MatchState
+	local tut = state.Tutorial
+	return s and tut and s.Players and s.Players[tut.Seat]
+end
+function Point.emptyLane(lanes)
+	local me = Point.me()
+	for _, lane in ipairs(lanes) do
+		if me and not (me.Lanes and me.Lanes[lane]) then
+			return lane
+		end
+	end
+	return nil
+end
+function Point.unitLane()
+	local me = Point.me()
+	for lane = 1, 3 do
+		if me and me.Lanes and me.Lanes[lane] then
+			return lane
+		end
+	end
+	return nil
+end
+-- a unit card they can afford, onto one of these lanes (nil if there's none)
+function Point.playUnit(lanes)
+	local me = Point.me()
+	local lane = Point.emptyLane(lanes)
+	if not (me and lane) then
+		return nil
+	end
+	for i, cardId in ipairs(me.Hand or {}) do
+		local card = CardDatabase.GetCard(cardId)
+		if card and card.Type == "Unit" and card.EnergyCost <= (me.Energy or 0) then
+			return { "HandCard_" .. i, "Slot_Self_" .. lane }
+		end
+	end
+	return nil
+end
+Point.endTurn = { "EndTurnButton" }
+
 local function updatePointer(t)
 	local tut = state.Tutorial
 	local step = tut and STEPS_REF[tut.Step]
-	local path = step and step.Pointer
+	local path = nil
+	if step and step.Pointer then
+		local ok, result = pcall(step.Pointer)
+		path = ok and result or nil
+	end
 	local x0, y0, x1, y1
 	if path then
 		x0, y0 = centerOf(path[1])
-		x1, y1 = centerOf(path[2])
+		if path[2] then
+			x1, y1 = centerOf(path[2])
+		end
 	end
-	if not (x0 and x1) then
+	if not x0 or (path[2] and not x1) then
 		pointer.Visible = false
 		return
 	end
 	local phase = ((t - (state.StepShownAt or 0)) % 1.8) / 1.8
-	local a = math.clamp((phase - 0.15) / 0.55, 0, 1)
-	a = a * a * (3 - 2 * a) -- ease in and out
-	pointer.Position = UDim2.fromOffset(x0 + (x1 - x0) * a, y0 + (y1 - y0) * a)
-	pointer.TextTransparency = phase > 0.85 and (phase - 0.85) / 0.15 or 0
+	if x1 then
+		-- press on the first thing, slide (or move) to the second
+		local a = math.clamp((phase - 0.15) / 0.55, 0, 1)
+		a = a * a * (3 - 2 * a) -- ease in and out
+		pointer.Position = UDim2.fromOffset(x0 + (x1 - x0) * a, y0 + (y1 - y0) * a)
+		pointer.TextTransparency = phase > 0.85 and (phase - 0.85) / 0.15 or 0
+	else
+		-- one thing to tap: the finger taps it again and again
+		local press = math.abs(math.sin(phase * math.pi * 2))
+		pointer.Position = UDim2.fromOffset(x0, y0 + 4 + 14 * press)
+		pointer.TextTransparency = 0
+	end
 	pointer.Visible = true
 	-- stuck for a while: say it another way
 	if step.Nudge and t - (state.StepShownAt or t) > (step.NudgeAfter or 10) and boxText.Text ~= step.Nudge then
@@ -527,34 +589,47 @@ end)
 	Until = an event of yours that finishes the step early ]]
 local STEPS = {
 	{ Id = "intro", Kind = "mine", Next = true, Focus = { "EnemyCommander" },
+		Pointer = function() return { "TutorialNext" } end,
 		Title = "BEAT SELENE", Text = "Knock her Commander from 12 HP down to 0." },
 	{ Id = "play_unit", Kind = "mine", Until = "UnitPlayed", Glow = { "Hand" },
 		Focus = { "Hand", "Slot_Self_1", "Slot_Self_2" },
-		Pointer = { "HandCard_1", "Slot_Self_1" },
+		Pointer = function() return Point.playUnit({ 1, 2 }) end,
 		Nudge = "Drag a glowing card onto lane 1 or 2. (Or tap the card, then tap the lane.)",
 		Title = "PLAY A UNIT", Text = "Drag a card onto lane 1 or 2 (or tap it, then tap the lane). Lane 3 is saved for something big!" },
 	{ Id = "end_turn", Kind = "mine", Glow = { "EndTurnButton" }, Focus = { "EndTurnButton" },
+		Pointer = function() return Point.endTurn end,
 		Title = "END YOUR TURN", Text = "New units attack starting next turn." },
 	{ Id = "their_turn", Kind = "theirs",
 		Title = "SELENE'S TURN", Text = "Watch what she plays." },
 	{ Id = "lanes", Kind = "mine", Glow = { "Slot_Self_1", "Slot_Self_2" },
 		Focus = { "Hand", "Slot_Self_1", "Slot_Self_2", "Slot_Self_3", "Slot_Enemy_1", "Slot_Enemy_2", "Slot_Enemy_3", "EndTurnButton" },
+		Pointer = function()
+			return (not state.StepPlayed and Point.playUnit({ 1, 2, 3 })) or Point.endTurn
+		end,
 		Title = "LANES FIGHT", Text = "Units hit the lane straight across. Empty lane? It hits Selene! Play a unit, then End Turn." },
 	{ Id = "their_turn2", Kind = "theirs",
 		Title = "SELENE'S TURN", Text = "Units with 0 Health are defeated." },
 	{ Id = "ability", Kind = "mine", Until = "CommanderAbility", Glow = { "AbilityButton" },
 		Focus = { "AbilityButton", "MyCommander", "Slot_Self_1", "Slot_Self_2", "Slot_Self_3" },
+		Pointer = function()
+			local lane = Point.unitLane()
+			return lane and { "AbilityButton", "Slot_Self_" .. lane } or nil
+		end,
 		Title = "USE YOUR POWER", Text = "Tap Ability, then a unit: +2 Power this turn." },
 	{ Id = "spend", Kind = "mine", Glow = { "Hand", "EndTurnButton" },
+		Pointer = function()
+			return (not state.StepPlayed and Point.playUnit({ 1, 2, 3 })) or Point.endTurn
+		end,
 		Title = "SPEND YOUR ENERGY", Text = "You get 1 more energy every turn. Play a card, then End Turn." },
 	{ Id = "their_turn3", Kind = "theirs",
 		Title = "SELENE'S TURN", Text = "Get ready. Something big is coming..." },
 	{ Id = "celestial", Kind = "mine", Until = "CelestialSummoned", Glow = { "StarGateButton", "Slot_Self_3" },
 		Focus = { "StarGateButton", "Slot_Self_3", "Slot_Enemy_3" },
-		Pointer = { "StarGateButton", "Slot_Self_3" },
-		Nudge = "Tap the glowing Star Gate first, then tap lane 3.",
-		Title = "SUMMON YOUR CELESTIAL", Text = "Tap the Star Gate, then lane 3. Nothing stands across from it!" },
+		Pointer = function() return { "StarGateButton", "Slot_Self_3" } end,
+		Nudge = "Drag the glowing Star Gate onto lane 3. (Or tap the Star Gate, then tap lane 3.)",
+		Title = "SUMMON YOUR CELESTIAL", Text = "Drag your Star Gate onto lane 3 (or tap it, then lane 3). Nothing stands across from it!" },
 	{ Id = "finish", Kind = "final", Glow = { "EndTurnButton" }, Focus = { "EndTurnButton", "Slot_Self_3", "EnemyCommander" },
+		Pointer = function() return Point.endTurn end,
 		Title = "FINISH HER!", Text = "Flare Stallion has Rush. End your turn and it charges straight at Selene!" },
 }
 STEPS_REF = STEPS
@@ -569,6 +644,7 @@ local function showStep()
 	end
 	box.Visible = true
 	state.StepShownAt = os.clock()
+	state.StepPlayed = false
 	boxTitle.Text = step.Title or ""
 	boxText.Text = step.Text
 	boxNext.Visible = step.Next == true
@@ -614,6 +690,8 @@ local function onTutorialEvents(seat, events)
 			end
 		elseif step.Until and e.Type == step.Until and e.Player == seat then
 			advance()
+		elseif (e.Type == "UnitPlayed" or e.Type == "SpellCast") and e.Player == seat then
+			state.StepPlayed = true -- (the pointer moves on to End Turn)
 		end
 	end
 end
@@ -852,6 +930,7 @@ battleUpdate.OnClientEvent:Connect(function(payload)
 			state.TurnEndsAt = nil
 		end
 		if payload.Tutorial then
+			state.MatchState = s
 			if not state.Tutorial then
 				state.Tutorial = { Step = 1, Seat = payload.Seat }
 				reportStep()

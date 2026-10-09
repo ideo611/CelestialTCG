@@ -1859,10 +1859,6 @@ function render()
 					PICK.DragTracked = true
 					pcall(function() ReplicatedStorage.AnalyticsRemotes.Track:FireServer("card_dragged") end)
 				end
-				local function inside(gui)
-					local pos, size = gui.AbsolutePosition, gui.AbsoluteSize
-					return p.X >= pos.X and p.X <= pos.X + size.X and p.Y >= pos.Y and p.Y <= pos.Y + size.Y
-				end
 				local untargeted = (card.Type == "Spell" and not card.Effect.Target) or card.Type == "Anomaly"
 				if untargeted then
 					if p.Y < handFrame.AbsolutePosition.Y then
@@ -1873,16 +1869,9 @@ function render()
 					end
 					return
 				end
-				for _, side in ipairs({ "Self", "Enemy" }) do
-					for lane = 1, LANES do
-						local click = PICK.SlotClick and PICK.SlotClick[side][lane]
-						if click and inside(slots[side][lane]) then
-							click()
-							return
-						end
-					end
+				if not PICK.DropOnLane(p) then
+					selectThing(nil)
 				end
-				selectThing(nil)
 			end,
 		})
 		cardButton.Activated:Connect(function()
@@ -3242,6 +3231,20 @@ for _, side in ipairs({ "Enemy", "Self" }) do
 		-- (a card dropped on this lane acts like a click here)
 		PICK.SlotClick = PICK.SlotClick or { Self = {}, Enemy = {} }
 		PICK.SlotClick[side][lane] = slotClick
+		-- a dragged card or Celestial let go at point p: click the lane under it (true if there was one)
+		PICK.DropOnLane = PICK.DropOnLane or function(p)
+			for _, s in ipairs({ "Self", "Enemy" }) do
+				for l = 1, LANES do
+					local slot = slots[s][l]
+					local pos, size = slot.AbsolutePosition, slot.AbsoluteSize
+					if p.X >= pos.X and p.X <= pos.X + size.X and p.Y >= pos.Y and p.Y <= pos.Y + size.Y then
+						PICK.SlotClick[s][l]()
+						return true
+					end
+				end
+			end
+			return false
+		end
 		slots[side][lane].Activated:Connect(function()
 			if require(ReplicatedStorage:WaitForChild("LongPress")).Swallowed()
 				or require(ReplicatedStorage:WaitForChild("CardDrag")).Swallowed() then
@@ -3313,8 +3316,32 @@ end)
 inspectFrame.Activated:Connect(closeInspect)
 inspectClose.Activated:Connect(closeInspect)
 
+-- drag the Star Gate onto a lane to summon (tapping the gate, then the lane, still works)
+require(ReplicatedStorage:WaitForChild("CardDrag")).Attach(myGate, {
+	Layer = root,
+	CanDrag = function()
+		local mine = current and current.State.Players[current.Seat]
+		local gate = mine and mine.StarGate
+		return gate ~= nil and gate.CardId ~= nil and not gate.OnBoard and not inspectMode and isMyTurn()
+			and gate.Cost <= mine.Energy
+			and not require(ReplicatedStorage:WaitForChild("LongPress")).Swallowed()
+	end,
+	MakeGhost = function(parent)
+		local gateId = current.State.Players[current.Seat].StarGate.CardId
+		drawCard(parent, gateId, nil, false, false, finishFor("Self", gateId))
+	end,
+	OnStart = function()
+		selectThing({ Kind = "Celestial", Hint = "Drop your Celestial on an empty lane." })
+	end,
+	OnDrop = function(p)
+		if not PICK.DropOnLane(p) then
+			selectThing(nil)
+		end
+	end,
+})
 myGate.Activated:Connect(function()
-	if require(ReplicatedStorage:WaitForChild("LongPress")).Swallowed() then
+	if require(ReplicatedStorage:WaitForChild("LongPress")).Swallowed()
+		or require(ReplicatedStorage:WaitForChild("CardDrag")).Swallowed() then
 		return
 	end
 	if inspectMode then

@@ -148,9 +148,46 @@ check("the glow doesn't sit inside the hand (it would push the cards aside)",
 -- play through: each turn play what we can, use the ability, summon, end turn
 local actions = RS.BattleRemotes.BattleAction
 local texts = {}
+local celestialDragTried = false
+local pointedAt = {}
 for turn = 1, 14 do
 	local st = lastPayload("Match", before)
 	if not st or st.State.Winner then break end
+	local tt = guide:FindFirstChild("TutorialTitle", true)
+	if tt and tt.Text == "SUMMON YOUR CELESTIAL" and not celestialDragTried then
+		celestialDragTried = true
+		local ptr = guide:FindFirstChild("TutorialPointer", true)
+		check("celestial step: the hand points", ptr and ptr.Visible)
+		-- put the lanes where they'd be on screen, then drag the Star Gate onto lane 3
+		M.absOverride = {}
+		for side, row in pairs({ Self = 500, Enemy = 200 }) do
+			for lane = 1, 3 do
+				M.absOverride[battleGui:FindFirstChild("Slot_" .. side .. "_" .. lane, true)] =
+					{ Vector2.new(200 * lane, row), Vector2.new(150, 200) }
+			end
+		end
+		local gateB = battleGui:FindFirstChild("StarGateButton", true)
+		local mark = #M.remoteLog
+		gateB.InputBegan:Fire({ UserInputType = Enum.UserInputType.MouseButton1, Position = Vector2.new(100, 600),
+			Changed = M.Signal.new() })
+		game:GetService("UserInputService").InputChanged:Fire({ UserInputType = Enum.UserInputType.MouseMovement,
+			Position = Vector2.new(400, 600) })
+		M.run(0.1)
+		game:GetService("UserInputService").InputEnded:Fire({ UserInputType = Enum.UserInputType.MouseButton1,
+			Position = Vector2.new(670, 600) })
+		M.run(1.5)
+		local summonedLane
+		for k = mark + 1, #M.remoteLog do
+			local e = M.remoteLog[k]
+			if e.Remote == "BattleUpdate" and type(e.Args[1]) == "table" then
+				for _, ev in ipairs(e.Args[1].Events or {}) do
+					if ev.Type == "CelestialSummoned" then summonedLane = ev.Lane end
+				end
+			end
+		end
+		M.absOverride = nil
+		check("celestial: dragging the Star Gate onto lane 3 summons it", summonedLane == 3, tostring(summonedLane))
+	end
 	for k = 1, 4 do
 		actions:FireServer({ Kind = "PlayCard", HandIndex = 1, Lane = k })
 		M.run(1.2)
@@ -163,8 +200,18 @@ for turn = 1, 14 do
 	end
 	local t = guide:FindFirstChild("TutorialText", true)
 	if t then texts[#texts + 1] = t.Text end
+	local tp = guide:FindFirstChild("TutorialPointer", true)
+	local ttl = guide:FindFirstChild("TutorialTitle", true)
+	if tp and tp.Visible and ttl and guide:FindFirstChild("TutorialBox", true).Visible then pointedAt[ttl.Text] = true end
 	actions:FireServer({ Kind = "EndTurn" })
 	M.run(12)
+end
+do
+	local names = {}
+	for k in pairs(pointedAt) do names[#names + 1] = k end
+	table.sort(names)
+	check("the hand points at the next action on later steps", pointedAt["END YOUR TURN"] or pointedAt["SPEND YOUR ENERGY"]
+		or pointedAt["LANES FIGHT"] or pointedAt["FINISH HER!"], table.concat(names, ", "))
 end
 local done = lastPayload("TutorialDone", before)
 check("tutorial finishes", done ~= nil, done and tostring(done.Won))

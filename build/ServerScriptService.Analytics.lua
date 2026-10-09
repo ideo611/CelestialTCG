@@ -70,6 +70,8 @@ local CLIENT_EVENTS = {
 	invite_sent = true,
 	starter_offer_dismissed = true,
 	first_match_skipped = true,
+	tutorial_nudge = true,
+	card_dragged = true,
 }
 
 local service = nil

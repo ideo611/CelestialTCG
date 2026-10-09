@@ -317,6 +317,7 @@ end
 -- frames broke layouts: inside the hand, the glow counted as a "card" and
 -- pushed the real cards off to the right.)
 local glowLayer -- (made below, with the spotlight)
+local STEPS_REF -- (the tutorial steps, defined further down)
 local function glow(names)
 	clearGlows()
 	for _, name in ipairs(names or {}) do
@@ -450,11 +451,67 @@ local function updateGlows()
 	end
 end
 
+-- A hand that shows the move: slides from a card (or button) to the lane,
+-- over and over, while the step is on screen.
+local pointer = make("TextLabel", {
+	Name = "TutorialPointer",
+	Text = "\u{1F446}", -- (pointing-up hand: its fingertip is at the top)
+	TextScaled = true,
+	BackgroundTransparency = 1,
+	AnchorPoint = Vector2.new(0.4, 0),
+	Size = UDim2.fromOffset(56, 56),
+	Visible = false,
+	ZIndex = 26,
+}, spotlightRoot)
+
+local function centerOf(name)
+	local bg = battleGui()
+	local target = bg and bg.Enabled and bg:FindFirstChild(name, true)
+	if not (target and target:IsA("GuiObject") and target.Visible) then
+		return nil
+	end
+	local ok, pos, size = pcall(function()
+		return target.AbsolutePosition, target.AbsoluteSize
+	end)
+	if not (ok and pos and size and size.X > 0) then
+		return nil
+	end
+	local origin = spotlightRoot.AbsolutePosition
+	return pos.X - origin.X + size.X / 2, pos.Y - origin.Y + size.Y / 2
+end
+
+local function updatePointer(t)
+	local tut = state.Tutorial
+	local step = tut and STEPS_REF[tut.Step]
+	local path = step and step.Pointer
+	local x0, y0, x1, y1
+	if path then
+		x0, y0 = centerOf(path[1])
+		x1, y1 = centerOf(path[2])
+	end
+	if not (x0 and x1) then
+		pointer.Visible = false
+		return
+	end
+	local phase = ((t - (state.StepShownAt or 0)) % 1.8) / 1.8
+	local a = math.clamp((phase - 0.15) / 0.55, 0, 1)
+	a = a * a * (3 - 2 * a) -- ease in and out
+	pointer.Position = UDim2.fromOffset(x0 + (x1 - x0) * a, y0 + (y1 - y0) * a)
+	pointer.TextTransparency = phase > 0.85 and (phase - 0.85) / 0.15 or 0
+	pointer.Visible = true
+	-- stuck for a while: say it another way
+	if step.Nudge and t - (state.StepShownAt or t) > (step.NudgeAfter or 10) and boxText.Text ~= step.Nudge then
+		boxText.Text = step.Nudge
+		pcall(function() ReplicatedStorage.AnalyticsRemotes.Track:FireServer("tutorial_nudge", step.Id) end)
+	end
+end
+
 -- Pulse the glows
 RunService.Heartbeat:Connect(function()
 	local t = os.clock()
 	updateSpotlight()
 	updateGlows()
+	updatePointer(t)
 	for _, g in ipairs(glows) do
 		local stroke = g:FindFirstChild("GlowStroke")
 		if stroke then
@@ -473,7 +530,9 @@ local STEPS = {
 		Title = "BEAT SELENE", Text = "Knock her Commander from 12 HP down to 0." },
 	{ Id = "play_unit", Kind = "mine", Until = "UnitPlayed", Glow = { "Hand" },
 		Focus = { "Hand", "Slot_Self_1", "Slot_Self_2" },
-		Title = "PLAY A UNIT", Text = "Tap a card, then tap lane 1 or 2. (Lane 3 is saved for something big!)" },
+		Pointer = { "HandCard_1", "Slot_Self_1" },
+		Nudge = "Drag a glowing card onto lane 1 or 2. (Or tap the card, then tap the lane.)",
+		Title = "PLAY A UNIT", Text = "Drag a card onto lane 1 or 2 (or tap it, then tap the lane). Lane 3 is saved for something big!" },
 	{ Id = "end_turn", Kind = "mine", Glow = { "EndTurnButton" }, Focus = { "EndTurnButton" },
 		Title = "END YOUR TURN", Text = "New units attack starting next turn." },
 	{ Id = "their_turn", Kind = "theirs",
@@ -492,10 +551,13 @@ local STEPS = {
 		Title = "SELENE'S TURN", Text = "Get ready. Something big is coming..." },
 	{ Id = "celestial", Kind = "mine", Until = "CelestialSummoned", Glow = { "StarGateButton", "Slot_Self_3" },
 		Focus = { "StarGateButton", "Slot_Self_3", "Slot_Enemy_3" },
+		Pointer = { "StarGateButton", "Slot_Self_3" },
+		Nudge = "Tap the glowing Star Gate first, then tap lane 3.",
 		Title = "SUMMON YOUR CELESTIAL", Text = "Tap the Star Gate, then lane 3. Nothing stands across from it!" },
 	{ Id = "finish", Kind = "final", Glow = { "EndTurnButton" }, Focus = { "EndTurnButton", "Slot_Self_3", "EnemyCommander" },
 		Title = "FINISH HER!", Text = "Flare Stallion has Rush. End your turn and it charges straight at Selene!" },
 }
+STEPS_REF = STEPS
 
 local function showStep()
 	local tut = state.Tutorial
@@ -506,6 +568,7 @@ local function showStep()
 		return
 	end
 	box.Visible = true
+	state.StepShownAt = os.clock()
 	boxTitle.Text = step.Title or ""
 	boxText.Text = step.Text
 	boxNext.Visible = step.Next == true
@@ -594,6 +657,13 @@ local function refresh()
 		firstMatchParts.BoxText.Text = ("Or open your FREE %s Booster Box (12 packs)!"):format(freeBox)
 	end
 	firstMatch.Size = freeBox and UDim2.fromScale(0.56, 0.22) or UDim2.fromScale(0.56, 0.12)
+	-- the reward for winning it, when there is one
+	local firstText = firstMatch:FindFirstChild("FirstMatchText")
+	if firstText then
+		firstText.Text = (summary and summary.FirstWinAvailable and (summary.FirstWinTickets or 0) > 0)
+			and "NEXT: your first match vs the Practice Bot. Win it for a FREE Booster Pack Ticket!"
+			or "NEXT: play your first match against the Practice Bot!"
+	end
 	playButton.Visible = not state.InBattle and ownsStarter(summary)
 	howButton.Visible = not state.InBattle and ownsStarter(summary)
 	firstWinHint.Visible = not state.InBattle and summary ~= nil and summary.FirstWinAvailable == true

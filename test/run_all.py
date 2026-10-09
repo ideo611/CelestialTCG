@@ -447,6 +447,44 @@ do
 	end
 	check("picking a hand card shows it big", shown)
 end
+-- drag a card from the hand onto a lane plays it (mouse; tap-tap still works)
+do
+	local UIS = game:GetService("UserInputService")
+	local played, ghostSeen = false, false
+	for _ = 1, 5 do
+		local etb = battleGui and battleGui:FindFirstChild("EndTurnButton", true)
+		if etb and etb.Label.Text == "End Turn" then
+			for idx = 1, 8 do
+				local hc = battleGui:FindFirstChild("HandCard_" .. idx, true)
+				if not hc then break end
+				local before = #M.remoteLog
+				local down = { UserInputType = Enum.UserInputType.MouseButton1, UserInputState = Enum.UserInputState.Begin,
+					Position = Vector2.new(800, 850), Changed = M.Signal.new() }
+				hc.InputBegan:Fire(down)
+				UIS.InputChanged:Fire({ UserInputType = Enum.UserInputType.MouseMovement, Position = Vector2.new(800, 600) })
+				M.run(0.1)
+				if battleGui:FindFirstChild("DraggedCard", true) then ghostSeen = true end
+				UIS.InputEnded:Fire({ UserInputType = Enum.UserInputType.MouseButton1, Position = Vector2.new(800, 400) })
+				M.run(0.5)
+				for k = before + 1, #M.remoteLog do
+					local e = M.remoteLog[k]
+					if e.Remote == "BattleUpdate" and type(e.Args[1]) == "table" then
+						for _, ev in ipairs(e.Args[1].Events or {}) do
+							if ev.Type == "UnitPlayed" then played = true end
+						end
+					end
+				end
+				if played then break end
+			end
+		end
+		if played then break end
+		actions:FireServer({ Kind = "EndTurn" })
+		M.run(6)
+	end
+	check("drag: the dragged card follows the pointer", ghostSeen)
+	check("drag: dropping a unit on a lane plays it", played)
+	check("drag: the dragged copy is gone after the drop", battleGui:FindFirstChild("DraggedCard", true) == nil)
+end
 for i = 1, 4 do
 	actions:FireServer({ Kind = "EndTurn" })
 	M.run(6)

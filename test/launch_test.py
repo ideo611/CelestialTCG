@@ -132,6 +132,17 @@ for _, d in ipairs(guide:GetDescendants()) do
 	if d.Name == "TutorialGlow" and d:GetAttribute("Target") == "Hand" then handGlow = d end
 end
 check("step 2 highlights the hand", handGlow ~= nil)
+M.run(0.5)
+local ptr = guide:FindFirstChild("TutorialPointer", true)
+check("step 2: a hand shows the drag", ptr and ptr.Visible)
+check("step 2: says drag", results.tutorialText2:find("Drag") ~= nil, results.tutorialText2)
+M.run(10.5)
+check("step 2: stuck for 10s, the hint changes", guide:FindFirstChild("TutorialText", true).Text:find("glowing") ~= nil,
+	guide:FindFirstChild("TutorialText", true).Text)
+results.tutPhoneBattle = DUMP(battleGui, 844, 390)
+results.tutPhoneGuide = DUMP(guide, 844, 390)
+results.tutPcBattle = DUMP(battleGui, 1600, 900)
+results.tutPcGuide = DUMP(guide, 1600, 900)
 check("the glow doesn't sit inside the hand (it would push the cards aside)",
 	battleGui:FindFirstChild("Hand", true):FindFirstChild("TutorialGlow") == nil)
 -- play through: each turn play what we can, use the ability, summon, end turn
@@ -190,6 +201,8 @@ local freeBoxB = guide:FindFirstChild("OpenFreeBox", true)
 check("after the tutorial: the free Solar box can be opened from here", freeBoxB and freeBoxB.Visible
 	and guide:FindFirstChild("FreeBoxText", true).Text:find("Solar") ~= nil, guide:FindFirstChild("FreeBoxText", true).Text)
 results.firstMatchBanner = DUMP(guide, 1600, 900)
+check("banner: says the first win earns a ticket", guide:FindFirstChild("FirstMatchText", true).Text:find("Ticket") ~= nil,
+	guide:FindFirstChild("FirstMatchText", true).Text)
 -- open it: the shop opens straight into the box
 freeBoxB.Activated:Fire() M.run(2)
 local shopG = pg:FindFirstChild("ShopGui")
@@ -208,15 +221,17 @@ before = #M.remoteLog
 local playNow = guide and guide:FindFirstChild("PlayFirstMatch", true)
 if playNow then playNow.Activated:Fire() end
 M.run(1.5)
-local choose = lastPayload("ChooseDeck", before)
-check("practice from anywhere: deck choice opens", choose ~= nil and choose.VsBot == true)
+check("first match: no deck picker (one tap)", lastPayload("ChooseDeck", before) == nil)
+local quick = lastPayload("Match", before)
+check("first match: starts straight away with their starter vs the Easy bot",
+	quick ~= nil and PlayerData.Get(nik) and logged("first_match_quickstart") ~= nil
+	and logged("first_match_quickstart").Detail == "Solar", quick and quick.Kind)
 local openTables = 0
 for _, d in ipairs(workspace:GetDescendants()) do
 	if d.ClassName == "ProximityPrompt" and d.ActionText == "Practice vs Bot" and d.Enabled then openTables = openTables + 1 end
 end
 check("all 4 shop tables stay free", openTables == 4, openTables)
-actions:FireServer({ Kind = "ChooseDeck", Deck = "Solar", BestOf = 1 })
-M.run(2)
+M.run(1)
 actions:FireServer({ Kind = "Mulligan", Indexes = {} })
 M.run(1)
 check("onboarding: first_match_started", logged("first_match_started") ~= nil)
@@ -343,6 +358,9 @@ def to_py(t):
             return [to_py(t[k]) for k in sorted(keys)]
         return {k: to_py(v) for k, v in t.items()}
     return t
+for a, b, w, h, nm in (("tutPhoneBattle", "tutPhoneGuide", 844, 390, "tutorialStep2Phone"), ("tutPcBattle", "tutPcGuide", 1600, 900, "tutorialStep2PC")):
+    if out[a] and out[b]:
+        render(to_py(out[a]) + to_py(out[b]), w, h, OUTD + "/" + nm + ".png")
 for nm in ("inspectDump", "guideDump", "firstMatchBanner"):
     if out[nm]:
         render(to_py(out[nm]), 1600, 900, OUTD + "/" + nm + ".png")

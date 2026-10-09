@@ -1839,8 +1839,55 @@ function render()
 		require(ReplicatedStorage:WaitForChild("LongPress")).Attach(cardButton, function()
 			showInspect({ CardId = cardId })
 		end)
+		-- drag the card onto a lane (or, for a spell with no target, up onto the board)
+		require(ReplicatedStorage:WaitForChild("CardDrag")).Attach(cardButton, {
+			Layer = root,
+			CanDrag = function()
+				return not inspectMode and isMyTurn() and card.EnergyCost <= me.Energy
+					and not require(ReplicatedStorage:WaitForChild("LongPress")).Swallowed()
+			end,
+			MakeGhost = function(parent)
+				drawCard(parent, cardId, nil, false, false, finishFor("Self", cardId))
+			end,
+			OnStart = function()
+				local hint = card.Type == "Unit" and "Drop it on one of your empty lanes."
+					or (card.Effect and card.Effect.Target and "Drop it on a unit." or "Drop it on the board.")
+				selectThing({ Kind = "Hand", Index = i, CardId = cardId, Hint = hint })
+			end,
+			OnDrop = function(p)
+				if not PICK.DragTracked then -- (once a session: do players find dragging?)
+					PICK.DragTracked = true
+					pcall(function() ReplicatedStorage.AnalyticsRemotes.Track:FireServer("card_dragged") end)
+				end
+				local function inside(gui)
+					local pos, size = gui.AbsolutePosition, gui.AbsoluteSize
+					return p.X >= pos.X and p.X <= pos.X + size.X and p.Y >= pos.Y and p.Y <= pos.Y + size.Y
+				end
+				local untargeted = (card.Type == "Spell" and not card.Effect.Target) or card.Type == "Anomaly"
+				if untargeted then
+					if p.Y < handFrame.AbsolutePosition.Y then
+						selected = nil
+						send({ Kind = "PlayCard", HandIndex = i })
+					else
+						selectThing(nil)
+					end
+					return
+				end
+				for _, side in ipairs({ "Self", "Enemy" }) do
+					for lane = 1, LANES do
+						local click = PICK.SlotClick and PICK.SlotClick[side][lane]
+						if click and inside(slots[side][lane]) then
+							click()
+							return
+						end
+					end
+				end
+				selectThing(nil)
+			end,
+		})
 		cardButton.Activated:Connect(function()
-			if require(ReplicatedStorage:WaitForChild("LongPress")).Swallowed() then
+			if require(ReplicatedStorage:WaitForChild("LongPress")).Swallowed()
+				or require(ReplicatedStorage:WaitForChild("CardDrag")).Swallowed() then
 				return
 			end
 			if inspectMode then
@@ -3149,10 +3196,7 @@ for _, side in ipairs({ "Enemy", "Self" }) do
 		end
 		slots[side][lane].MouseButton2Click:Connect(inspectHere)
 		require(ReplicatedStorage:WaitForChild("LongPress")).Attach(slots[side][lane], inspectHere)
-		slots[side][lane].Activated:Connect(function()
-			if require(ReplicatedStorage:WaitForChild("LongPress")).Swallowed() then
-				return
-			end
+		local function slotClick()
 			if inspectMode then
 				if not inspectHere() then
 					inspectMode = false
@@ -3194,6 +3238,16 @@ for _, side in ipairs({ "Enemy", "Self" }) do
 				send({ Kind = "UseAbility", Target = target })
 			end
 			selectThing(nil)
+		end
+		-- (a card dropped on this lane acts like a click here)
+		PICK.SlotClick = PICK.SlotClick or { Self = {}, Enemy = {} }
+		PICK.SlotClick[side][lane] = slotClick
+		slots[side][lane].Activated:Connect(function()
+			if require(ReplicatedStorage:WaitForChild("LongPress")).Swallowed()
+				or require(ReplicatedStorage:WaitForChild("CardDrag")).Swallowed() then
+				return
+			end
+			slotClick()
 		end)
 	end
 end

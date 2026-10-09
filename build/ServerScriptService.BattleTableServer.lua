@@ -31,6 +31,7 @@ local RateLimit = require(ServerScriptService:WaitForChild("RateLimit"))
 
 local BOT = "BOT"
 local BOT_ACTION_DELAY = 0.8 -- seconds between bot plays, so you can follow along
+local TUTORIAL_BOT_DELAY = 0.45 -- (Selene moves quicker: new players were waiting a lot)
 -- time to choose a starting hand before it's kept as is (+12 while the
 -- Commander intro is on: it plays before the hand appears)
 local INTRO_ON = require(ReplicatedStorage:WaitForChild("CommanderIntro")).Enabled
@@ -439,7 +440,7 @@ local function createTable(index, position, parent, options)
 				sendMatchUpdate(events)
 			end
 		end, function()
-			task.wait(BOT_ACTION_DELAY)
+			task.wait(tutorial and TUTORIAL_BOT_DELAY or BOT_ACTION_DELAY)
 		end, botDifficulty())
 		if match.Battle == battle then
 			afterAction()
@@ -896,6 +897,39 @@ local function createTable(index, position, parent, options)
 		match.Seats[2] = BOT
 		moveToPad(player, 1)
 		refreshTable()
+		-- Their very first match: one tap, no deck picker (their starter deck, the
+		-- Easy bot, one game). Many new players stopped at the picker.
+		local data = PlayerData.Get(player)
+		if data and (data.Stats.Wins + data.Stats.Losses) == 0 and #data.Decks == 0 then
+			local mine = data.OwnedStarters[data.FirstStarter or ""] and data.FirstStarter or nil
+			if not mine then
+				for _, name in ipairs(CardDatabase.StarterDeckOrder) do
+					if data.OwnedStarters[name] then
+						mine = name
+						break
+					end
+				end
+			end
+			if mine then
+				local order = CardDatabase.StarterDeckOrder
+				local others = {}
+				for _, name in ipairs(order) do
+					if name ~= mine then
+						table.insert(others, name)
+					end
+				end
+				match.Decks[1] = buildDeck(mine)
+				match.Finishes[1] = bestFinishes(player, match.Decks[1])
+				match.Votes[1] = 1
+				match.Decks[2] = buildDeck(#others > 0 and others[math.random(1, #others)] or mine)
+				match.Votes[2] = 1
+				match.BotDifficulty = "Easy"
+				Analytics.Event(player, "first_match_quickstart", mine)
+				send(player, { Kind = "Waiting", Message = "Starting your first match..." })
+				startMatch()
+				return true
+			end
+		end
 		sendDeckChoice(player)
 		return true
 	end

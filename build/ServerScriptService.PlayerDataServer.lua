@@ -15,6 +15,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local TextService = game:GetService("TextService")
 
 local Packs = require(ReplicatedStorage:WaitForChild("Packs"))
+local CardDatabase = require(ReplicatedStorage:WaitForChild("CardDatabase"))
 local PlayerData = require(ServerScriptService:WaitForChild("PlayerData"))
 local RateLimit = require(ServerScriptService:WaitForChild("RateLimit"))
 local Analytics = require(ServerScriptService:WaitForChild("Analytics"))
@@ -129,11 +130,36 @@ local function filterName(player, name)
 	return nil
 end
 
+-- A deck saved without a name gets one: "<Commander> Deck" ("Malakar Deck 2"
+-- if that's taken), so a deck is never lost for want of a name
+local function autoDeckName(player, args)
+	local commander = type(args.Commander) == "string" and CardDatabase.GetCard(args.Commander)
+	local base = ((commander and commander.Name or "My"):match("^([^,]+)") or "My") .. " Deck"
+	local data = PlayerData.Get(player)
+	local taken = {}
+	for _, deck in ipairs(data and data.Decks or {}) do
+		if deck.Id ~= args.Id then
+			taken[deck.Name] = true
+		end
+	end
+	local name, n = base, 1
+	while taken[name] do
+		n = n + 1
+		name = ("%s %d"):format(base, n)
+	end
+	return name:sub(1, PlayerData.MaxDeckNameLength)
+end
+
 function handlers.SaveDeck(player, args)
 	local name = type(args.Name) == "string" and args.Name or ""
 	name = name:gsub("^%s+", ""):gsub("%s+$", "")
 	if name == "" then
-		return false, "Give your deck a name."
+		-- our own name (no filtering needed)
+		local ok, result = PlayerData.SaveDeck(player, args, autoDeckName(player, args))
+		if ok then
+			Analytics.Event(player, "deck_saved", args.Format)
+		end
+		return ok, result
 	end
 	if #name > PlayerData.MaxDeckNameLength then
 		return false, ("Deck names can be up to %d letters."):format(PlayerData.MaxDeckNameLength)

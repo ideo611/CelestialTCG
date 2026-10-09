@@ -149,6 +149,12 @@ local showUnowned = true
 local deckSortByStars = false -- deck list order in the editor
 local STAR = utf8.char(0x2605)
 local editor = nil      -- the deck being built: { Id, Name, Commander, Celestial, Cards = {}, Phase }
+-- What a deck looks like, to spot unsaved changes
+local function deckSnapshot(e)
+	local cards = table.clone(e.Cards or {})
+	table.sort(cards)
+	return table.concat({ e.Name or "", e.Commander or "", e.Celestial or "", e.Format or "", table.concat(cards, ",") }, "|")
+end
 local confirmDelete = nil
 local render -- defined at the bottom
 
@@ -406,6 +412,7 @@ local function startEditor(deck)
 		editor = { Name = "", Cards = {}, Finishes = {}, Phase = "Commander", Format = CardDatabase.DefaultDeckFormat }
 	end
 	editor.Message = ""
+	editor.Saved = deckSnapshot(editor) -- (to tell whether Cancel would throw away changes)
 	view = "Editor"
 	render()
 end
@@ -637,7 +644,7 @@ local function renderEditor()
 		Size = UDim2.new(0.24, 0, 0, 36),
 		BackgroundColor3 = PANEL,
 		TextColor3 = WHITE,
-		PlaceholderText = "Name your deck",
+		PlaceholderText = "Name your deck (or leave blank)",
 		PlaceholderColor3 = Color3.fromRGB(150, 140, 180),
 		Font = Enum.Font.GothamBold,
 		TextSize = 18,
@@ -884,6 +891,15 @@ local function renderEditor()
 		end
 	end)
 	cancel.Activated:Connect(function()
+		editor.Name = nameBox.Text
+		-- unsaved changes: ask once before throwing them away
+		if deckSnapshot(editor) ~= editor.Saved and not editor.ConfirmCancel then
+			editor.ConfirmCancel = true
+			editor.Message = "This deck isn't saved! Press Save to keep it, or Cancel again to throw it away."
+			SoundAssets.Play("NotEnough")
+			render()
+			return
+		end
 		editor = nil
 		view = "Decks"
 		render()

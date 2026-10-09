@@ -246,6 +246,19 @@ do
 	local okSave, saveResult = RS.EconomyRemotes.EconomyRequest:InvokeServer("SaveDeck",
 		{ Name = "Test Solar", Commander = sd.Commander, Celestial = sd.Celestial, Cards = list })
 	check("deck builder: save a deck", okSave, saveResult)
+	-- saved without a name: named after its Commander instead of failing
+	local okBlank = RS.EconomyRemotes.EconomyRequest:InvokeServer("SaveDeck",
+		{ Name = "  ", Commander = sd.Commander, Celestial = sd.Celestial, Cards = list })
+	local okBlank2 = RS.EconomyRemotes.EconomyRequest:InvokeServer("SaveDeck",
+		{ Name = "", Commander = sd.Commander, Celestial = sd.Celestial, Cards = list })
+	local pdata = require(game:GetService("ServerScriptService").PlayerData).Get(game:GetService("Players"):GetPlayers()[1])
+	local names = {}
+	for _, d in ipairs(pdata.Decks) do names[d.Name] = d.Id end
+	check("deck builder: a blank name gets auto-named", okBlank and okBlank2 and names["Captain Sol Varro Deck"] and names["Captain Sol Varro Deck 2"] ~= nil)
+	-- (tidy up so the rest of the test sees just the one deck)
+	for i = #pdata.Decks, 1, -1 do
+		if pdata.Decks[i].Name ~= "Test Solar" then table.remove(pdata.Decks, i) end
+	end
 end
 local openCards = pg:FindFirstChild("OpenCollection", true)
 if openCards then openCards.Activated:Fire() M.run(0.5) end
@@ -279,8 +292,19 @@ do
 end
 local editAgain = colGui and colGui:FindFirstChild("EditDeck", true)
 if editAgain then editAgain.Activated:Fire() M.run(0.5) end
-local cancelDeck = colGui and colGui:FindFirstChild("CancelDeck", true)
-if cancelDeck then cancelDeck.Activated:Fire() M.run(0.5) end
+-- change something, then Cancel: it warns once before throwing the changes away
+do
+	local pdata = require(game:GetService("ServerScriptService").PlayerData).Get(game:GetService("Players"):GetPlayers()[1])
+	local box = colGui and colGui:FindFirstChild("DeckNameBox", true)
+	if box then box.Text = "Renamed" end
+	local cancelDeck = colGui and colGui:FindFirstChild("CancelDeck", true)
+	if cancelDeck then cancelDeck.Activated:Fire() M.run(0.5) end
+	check("deck builder: Cancel with unsaved changes warns first", colGui:FindFirstChild("EditorStatus", true)
+		and colGui:FindFirstChild("EditorStatus", true).Text:find("isn't saved") ~= nil)
+	cancelDeck = colGui:FindFirstChild("CancelDeck", true)
+	if cancelDeck then cancelDeck.Activated:Fire() M.run(0.5) end
+	check("deck builder: Cancel again discards", colGui:FindFirstChild("CancelDeck", true) == nil and pdata.Decks[1].Name ~= "Renamed")
+end
 local closeCol = colGui and colGui:FindFirstChild("CloseCollection", true)
 if closeCol then closeCol.Activated:Fire() M.run(0.5) end
 

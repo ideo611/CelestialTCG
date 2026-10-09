@@ -407,6 +407,7 @@ local CLASSES = {
 	Player = merge(BASE, { "DisplayName", "UserId", "Character" }),
 	PlayerGui = merge(BASE),
 	Camera = merge(BASE, { "CFrame", "FieldOfView", "CameraType", "ViewportSize" }),
+	Terrain = merge(BASE, { "Decoration", "WaterWaveSize", "WaterTransparency", "WaterColor" }),
 	Workspace = merge(BASE, { "CurrentCamera" }),
 	Service = merge(BASE, { "TouchEnabled", "KeyboardEnabled", "GamepadEnabled", "MouseEnabled", "GamepadCursorEnabled" }),
 }
@@ -717,6 +718,19 @@ rawset(workspace, "__methods", {
 	Raycast = function() return nil end,
 })
 local camera = Instance.new("Camera")
+-- Terrain: the fills are recorded (tests check what was built)
+M.terrainLog = {}
+do
+	local terrain = Instance.new("Terrain")
+	terrain.Name = "Terrain"
+	local function log(kind) return function(_, ...) table.insert(M.terrainLog, { Kind = kind, Args = { ... } }) end end
+	rawset(terrain, "__methods", {
+		FillBlock = log("FillBlock"), FillBall = log("FillBall"), FillCylinder = log("FillCylinder"),
+		FillWedge = log("FillWedge"), SetMaterialColor = log("SetMaterialColor"), Clear = log("Clear"),
+		ReplaceMaterial = log("ReplaceMaterial"),
+	})
+	terrain.Parent = workspace
+end
 camera.CFrame = CFrame.new(0, 10, 0)
 camera.ViewportSize = Vector2.new(1600, 900)
 camera.Parent = workspace

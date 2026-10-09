@@ -608,6 +608,38 @@ results.battle2 = battleGui and dump(battleGui, 1600, 900)
 
 -- space world
 check("space world built", workspace:FindFirstChild("SpaceWorld") ~= nil)
+do
+	local kinds = {}
+	for _, e in ipairs(M.terrainLog) do kinds[e.Kind] = (kinds[e.Kind] or 0) + 1 end
+	check("terrain: ground, hills, craters and mountains", (kinds.FillBlock or 0) >= 1 and (kinds.FillBall or 0) > 100
+		and (kinds.SetMaterialColor or 0) >= 5, tostring(kinds.FillBall) .. " balls")
+	local Lighting = game:GetService("Lighting")
+	check("lighting: bloom, color, depth of field", Lighting:FindFirstChild("SpaceBloom") and Lighting:FindFirstChild("SpaceColor")
+		and Lighting:FindFirstChild("SpaceDepth") ~= nil)
+	-- the shop's finish
+	local shop = workspace:FindFirstChild("CardShop")
+	local counts = {}
+	for _, d in ipairs(shop:GetDescendants()) do counts[d.Name] = (counts[d.Name] or 0) + 1 end
+	check("shop: ceiling, beams and moldings", counts.Ceiling == 1 and (counts.CeilingBeam or 0) == 5 and (counts.CrownMolding or 0) == 4)
+	check("shop: spotlights on the art and tables", (counts.ArtLight or 0) >= 8 and (counts.TableLight or 0) == 8,
+		tostring(counts.ArtLight) .. "/" .. tostring(counts.TableLight))
+	check("shop: stone facade trim with uplights", (counts.Pilaster or 0) == 4 and (counts.Uplight or 0) == 4)
+	local walnut = shop:FindFirstChild("Floor")
+	check("shop: counter is marble", shop:FindFirstChild("CounterTop", true).Material == Enum.Material.Marble)
+	-- nothing new sits in the doorway or blocks the walk in
+	local ORIGIN = Vector3.new(0, 0, -50)
+	local blocked = {}
+	for _, d in ipairs(shop:GetDescendants()) do
+		if d:IsA("BasePart") and d.CanCollide ~= false then
+			local c = d.Position - ORIGIN
+			if math.abs(c.X) < 3.5 and c.Z > 22 and c.Z < 40 and c.Y - d.Size.Y / 2 < 5 and d.Size.Y > 0.5 then
+				table.insert(blocked, d.Name)
+			end
+		end
+	end
+	check("shop: the doorway stays clear", #blocked == 0, table.concat(blocked, ","))
+	local _ = walnut
+end
 workspace:SetAttribute("SpaceEventNow", "Comet")
 M.run(3)
 

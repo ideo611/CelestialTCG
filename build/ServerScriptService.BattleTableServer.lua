@@ -177,6 +177,19 @@ local function createTable(index, position, parent, options)
 		}) do
 		makePart("Leg", Vector3.new(0.6, 2.4, 0.6), offset, TABLE_WOOD_DARK, Enum.Material.Wood)
 	end
+	-- a brass edge around the tabletop and brass feet (the premium touch)
+	local BRASS = Color3.fromRGB(214, 172, 92)
+	for _, band in ipairs({
+		{ Vector3.new(10.1, 0.14, 0.14), Vector3.new(0, 3.43, 3.03) }, { Vector3.new(10.1, 0.14, 0.14), Vector3.new(0, 3.43, -3.03) },
+		{ Vector3.new(0.14, 0.14, 6.1), Vector3.new(5.03, 3.43, 0) }, { Vector3.new(0.14, 0.14, 6.1), Vector3.new(-5.03, 3.43, 0) },
+		}) do
+		makePart("BrassEdge", band[1], band[2], BRASS, Enum.Material.Foil).CastShadow = false
+	end
+	for _, offset in ipairs({
+		Vector3.new(4.3, 0.12, 2.3), Vector3.new(-4.3, 0.12, 2.3), Vector3.new(4.3, 0.12, -2.3), Vector3.new(-4.3, 0.12, -2.3),
+		}) do
+		makePart("BrassFoot", Vector3.new(0.75, 0.24, 0.75), offset, BRASS, Enum.Material.Foil)
+	end
 	-- A deck box on each side of the felt, for looks
 	makePart("DeckBox", Vector3.new(0.7, 0.5, 0.9), Vector3.new(3.6, 3.83, 1.6), Color3.fromRGB(230, 120, 40))
 	makePart("DeckBox", Vector3.new(0.7, 0.5, 0.9), Vector3.new(-3.6, 3.83, -1.6), Color3.fromRGB(80, 120, 220))

@@ -122,14 +122,21 @@ end
 ---------------------------------------------------------------------
 local function setupLighting()
 	Lighting.ClockTime = 0.5
-	Lighting.Brightness = 2
-	Lighting.Ambient = Color3.fromRGB(70, 58, 100)
-	Lighting.OutdoorAmbient = Color3.fromRGB(110, 92, 150)
-	Lighting.EnvironmentDiffuseScale = 0.35
-	Lighting.EnvironmentSpecularScale = 0.6
+	Lighting.Brightness = 2.4
+	Lighting.Ambient = Color3.fromRGB(58, 48, 86)
+	Lighting.OutdoorAmbient = Color3.fromRGB(104, 86, 146)
+	Lighting.EnvironmentDiffuseScale = 0.5
+	Lighting.EnvironmentSpecularScale = 1 -- metal, glass and polished stone pick up the sky
+	Lighting.GlobalShadows = true
+	Lighting.ShadowSoftness = 0.18
 	Lighting.FogColor = Color3.fromRGB(40, 26, 70)
 	Lighting.FogStart = 400
 	Lighting.FogEnd = 3500
+	-- Future lighting (real light from every lamp, sharp shadows) can only be
+	-- switched on in Studio: Lighting > Technology > Future. (Scripts can't set it.)
+	pcall(function()
+		Lighting.Technology = Enum.Technology.Future
+	end)
 	for _, child in ipairs(Lighting:GetChildren()) do
 		if child:IsA("Sky") or child:IsA("Atmosphere") then
 			child:Destroy()
@@ -140,120 +147,151 @@ local function setupLighting()
 	sky.StarCount = 5000
 	sky.CelestialBodiesShown = false -- the planet and moons are ours (SpaceClient)
 	sky.Parent = Lighting
+	-- haze that thickens toward the horizon, so the mountains fade into the sky
 	local atmosphere = Instance.new("Atmosphere")
 	atmosphere.Name = "PlanetHaze"
-	atmosphere.Density = 0.12
-	atmosphere.Offset = 0.05
+	atmosphere.Density = 0.22
+	atmosphere.Offset = 0.08
 	atmosphere.Color = Color3.fromRGB(150, 110, 220)
 	atmosphere.Decay = Color3.fromRGB(70, 40, 120)
-	atmosphere.Glare = 0.2
-	atmosphere.Haze = 0.6
+	atmosphere.Glare = 0.35
+	atmosphere.Haze = 1.4
 	atmosphere.Parent = Lighting
-	if not Lighting:FindFirstChildOfClass("BloomEffect") then
-		local bloom = Instance.new("BloomEffect")
-		bloom.Name = "SpaceBloom"
-		bloom.Intensity = 0.7
-		bloom.Size = 28
-		bloom.Threshold = 1.6
-		bloom.Parent = Lighting
+	-- post effects (ours are replaced; any the place already has are left alone)
+	local function effect(className, name, props)
+		local existing = Lighting:FindFirstChild(name)
+		if existing then
+			existing:Destroy()
+		end
+		if Lighting:FindFirstChildOfClass(className) then
+			return nil
+		end
+		local e = Instance.new(className)
+		e.Name = name
+		for key, value in pairs(props) do
+			e[key] = value
+		end
+		e.Parent = Lighting
+		return e
 	end
-	if not Lighting:FindFirstChildOfClass("ColorCorrectionEffect") then
-		local cc = Instance.new("ColorCorrectionEffect")
-		cc.Name = "SpaceColor"
-		cc.Saturation = 0.12
-		cc.Contrast = 0.05
-		cc.TintColor = Color3.fromRGB(245, 238, 255)
-		cc.Parent = Lighting
-	end
+	effect("BloomEffect", "SpaceBloom", { Intensity = 0.85, Size = 34, Threshold = 1.25 }) -- neon and lamps glow softly
+	effect("ColorCorrectionEffect", "SpaceColor", {
+		Saturation = 0.14, Contrast = 0.12, Brightness = 0.015, TintColor = Color3.fromRGB(246, 240, 255),
+	})
+	-- a touch of distance blur: the horizon goes soft, everything near stays sharp
+	effect("DepthOfFieldEffect", "SpaceDepth", { FarIntensity = 0.14, FocusDistance = 40, InFocusRadius = 90, NearIntensity = 0 })
 end
 
 ---------------------------------------------------------------------
--- Ground
+-- Ground: real terrain (rolling dust, craters, boulders, mountains)
 ---------------------------------------------------------------------
+local terrain = workspace:FindFirstChildOfClass("Terrain")
+local M = Enum.Material
+
+-- The planet's colors for each terrain material
+local TERRAIN_COLORS = {
+	[M.Slate] = Color3.fromRGB(84, 70, 104),     -- the plain ground
+	[M.Ground] = Color3.fromRGB(70, 58, 88),     -- darker patches
+	[M.Sand] = Color3.fromRGB(116, 98, 132),     -- dust drifts
+	[M.Rock] = Color3.fromRGB(78, 66, 96),       -- crater rims, mountains
+	[M.Basalt] = Color3.fromRGB(52, 44, 66),     -- boulders
+	[M.Sandstone] = Color3.fromRGB(104, 84, 120), -- mountain bands
+	[M.Asphalt] = Color3.fromRGB(46, 40, 58),    -- crater floors
+}
+
 local function setupGround()
-	-- reuse the place's baseplate as the planet's surface (or make one)
+	if terrain then
+		terrain.Decoration = false
+		for material, color in pairs(TERRAIN_COLORS) do
+			terrain:SetMaterialColor(material, color)
+		end
+		-- the surface: 16 studs of rock whose top is exactly y = 0 (where everything stands)
+		terrain:FillBlock(CFrame.new(0, -8, 0), Vector3.new(2048, 16, 2048), M.Slate)
+	end
+	-- the place's baseplate goes under the terrain (a safety floor), its grid removed
 	local ground = workspace:FindFirstChild("Baseplate")
 	if ground and ground:IsA("BasePart") then
 		for _, child in ipairs(ground:GetChildren()) do
 			if child:IsA("Texture") or child:IsA("Decal") then
-				child:Destroy() -- the grid texture
+				child:Destroy()
 			end
 		end
-	else
-		ground = part("PlanetGround", Vector3.new(2048, 16, 2048), CFrame.new(0, -8, 0), GROUND, Enum.Material.Slate)
+	elseif not terrain then
+		ground = part("PlanetGround", Vector3.new(2048, 16, 2048), CFrame.new(0, -8, 0), GROUND, M.Slate)
 	end
-	ground.Color = GROUND
-	ground.Material = Enum.Material.Slate
-
-	-- patches of darker and dustier ground
-	local patches = Instance.new("Model")
-	patches.Name = "GroundPatches"
-	patches.Parent = world
-	for i = 1, 26 do
-		local spot = randomSpot(60, 420, 0)
+	if ground then
+		ground.Color = GROUND_DARK
+		ground.Material = M.Slate
+		if terrain then
+			ground.CFrame = CFrame.new(ground.Position.X, -16 - ground.Size.Y / 2, ground.Position.Z)
+		end
+	end
+	if not terrain then
+		return
+	end
+	-- patches of darker ground and drifts of dust (just the top layer changes)
+	for i = 1, 34 do
+		local spot = randomSpot(50, 600, 0)
 		if spot then
-			local size = rng:NextNumber(30, 90)
-			local color = i % 2 == 0 and GROUND_DARK or Color3.fromRGB(96, 78, 110)
-			disc("Patch", spot + Vector3.new(0, 0.02 + i * 0.002, 0), size, 0.1, color,
-				i % 3 == 0 and Enum.Material.Sand or Enum.Material.Slate, patches)
+			terrain:FillCylinder(CFrame.new(spot.X, -2, spot.Z), 4, rng:NextNumber(14, 46), i % 3 == 0 and M.Sand or M.Ground)
+		end
+	end
+	-- gentle dunes and hills, away from the shop
+	for _ = 1, 46 do
+		local radius = rng:NextNumber(24, 70)
+		local spot = randomSpot(110 + radius, 640, radius * 0.6)
+		if spot then
+			terrain:FillBall(Vector3.new(spot.X, -radius * 0.78, spot.Z), radius, rng:NextNumber() < 0.3 and M.Sand or M.Slate)
 		end
 	end
 end
 
--- A crater: a dark floor with a raised rim of rocks around it
-local function crater(center, diameter, parent)
-	local model = Instance.new("Model")
-	model.Name = "Crater"
-	model.Parent = parent
-	disc("CraterFloor", center + Vector3.new(0, 0.06, 0), diameter, 0.12, Color3.fromRGB(44, 36, 58), Enum.Material.Slate, model)
+-- A crater: a raised rocky rim and a bowl dug into the ground
+local function crater(center, diameter)
 	local radius = diameter / 2
-	local pieces = math.max(10, math.floor(diameter / 2.5))
+	local pieces = math.max(10, math.floor(diameter / 3))
 	for i = 1, pieces do
-		local angle = (i / pieces) * math.pi * 2
-		local width = 2 * math.pi * radius / pieces + 1.2
-		part("CraterRim", Vector3.new(width, rng:NextNumber(1.2, 2.6), 2.4),
-			CFrame.new(center + Vector3.new(math.cos(angle) * radius, 0.4, math.sin(angle) * radius))
-				* CFrame.Angles(0, -angle + math.pi / 2, 0) * CFrame.Angles(math.rad(rng:NextNumber(-25, -10)), 0, 0),
-			ROCK, Enum.Material.Slate, model)
+		local angle = (i / pieces) * math.pi * 2 + rng:NextNumber(-0.1, 0.1)
+		local r = radius * rng:NextNumber(0.92, 1.05)
+		terrain:FillBall(center + Vector3.new(math.cos(angle) * r, rng:NextNumber(-1.5, 0), math.sin(angle) * r),
+			radius * rng:NextNumber(0.18, 0.26), M.Rock)
 	end
-	return model
+	terrain:FillBall(center + Vector3.new(0, radius * 0.62, 0), radius * 0.95, M.Air)
+	terrain:FillCylinder(CFrame.new(center + Vector3.new(0, -radius * 0.33 - 1.5, 0)), 3, radius * 0.4, M.Asphalt) -- (recolors the floor only)
 end
 
-local function boulder(center, size, parent)
-	local model = Instance.new("Model")
-	model.Name = "Boulder"
-	model.Parent = parent
+-- A boulder: a few lumps of rock pushed together
+local function boulder(center, size)
 	for i = 1, 3 do
-		local s = size * rng:NextNumber(0.55, 1)
-		part("Rock", Vector3.new(s, s * rng:NextNumber(0.5, 0.9), s * rng:NextNumber(0.7, 1.1)),
-			CFrame.new(center + Vector3.new(rng:NextNumber(-size, size) * 0.4, s * 0.25, rng:NextNumber(-size, size) * 0.4))
-				* CFrame.Angles(rng:NextNumber(-0.4, 0.4), rng:NextNumber(0, math.pi), rng:NextNumber(-0.4, 0.4)),
-			i == 1 and ROCK or Color3.fromRGB(84, 70, 98), i == 2 and Enum.Material.Basalt or Enum.Material.Slate, model)
+		local s = size * rng:NextNumber(0.4, 0.62)
+		terrain:FillBall(center + Vector3.new(rng:NextNumber(-size, size) * 0.35, s * rng:NextNumber(-0.1, 0.35),
+			rng:NextNumber(-size, size) * 0.35), s, i == 3 and M.Rock or M.Basalt)
 	end
-	return model
 end
 
+-- Crystals: glassy shells with a glowing core
 local function crystals(center, parent)
 	local model = Instance.new("Model")
 	model.Name = "Crystals"
 	model.Parent = parent
 	local color = CRYSTAL_COLORS[rng:NextInteger(1, #CRYSTAL_COLORS)]
 	local tallest
-	for i = 1, rng:NextInteger(3, 6) do
+	for _ = 1, rng:NextInteger(3, 6) do
 		local height = rng:NextNumber(2.5, 9)
 		local width = height * rng:NextNumber(0.18, 0.3)
-		local crystal = part("Crystal", Vector3.new(width, height, width),
-			CFrame.new(center + Vector3.new(rng:NextNumber(-2.5, 2.5), height * 0.4, rng:NextNumber(-2.5, 2.5)))
-				* CFrame.Angles(rng:NextNumber(-0.45, 0.45), rng:NextNumber(0, math.pi), rng:NextNumber(-0.45, 0.45)),
-			color, Enum.Material.Neon, model)
-		crystal.Transparency = 0.15
-		crystal.CastShadow = false
+		local cf = CFrame.new(center + Vector3.new(rng:NextNumber(-2.5, 2.5), height * 0.4, rng:NextNumber(-2.5, 2.5)))
+			* CFrame.Angles(rng:NextNumber(-0.45, 0.45), rng:NextNumber(0, math.pi), rng:NextNumber(-0.45, 0.45))
+		local shell = part("Crystal", Vector3.new(width, height, width), cf, color:Lerp(Color3.new(1, 1, 1), 0.15), M.Glass, model)
+		shell.Transparency = 0.35
+		shell.Reflectance = 0.25
+		shell.CastShadow = false
+		local core = part("CrystalCore", Vector3.new(width * 0.45, height * 0.85, width * 0.45), cf, color, M.Neon, model)
+		core.CastShadow = false
 		if not tallest or height > tallest.Size.Y then
-			tallest = crystal
+			tallest = core
 		end
-		local _ = i
 	end
-	glow(tallest, 1.2, 18, color)
+	glow(tallest, 1.4, 20, color)
 	return model
 end
 
@@ -261,16 +299,39 @@ local function setupScenery()
 	local scenery = Instance.new("Model")
 	scenery.Name = "Scenery"
 	scenery.Parent = world
-	for _ = 1, 9 do
-		local spot = randomSpot(90, 380, 25)
-		if spot then
-			crater(spot, rng:NextNumber(26, 60), scenery)
+	if terrain then
+		for _ = 1, 10 do
+			local diameter = rng:NextNumber(30, 70)
+			local spot = randomSpot(90, 420, diameter * 0.6)
+			if spot then
+				crater(spot, diameter)
+			end
 		end
-	end
-	for _ = 1, 70 do
-		local spot = randomSpot(55, 420, 4)
-		if spot then
-			boulder(spot, rng:NextNumber(3, 12), scenery)
+		for _ = 1, 70 do
+			local spot = randomSpot(55, 460, 6)
+			if spot then
+				boulder(spot, rng:NextNumber(5, 14))
+			end
+		end
+		-- mountains all around the horizon: big rocky masses with peaks and bands
+		for i = 1, 22 do
+			local angle = (i / 22) * math.pi * 2 + rng:NextNumber(-0.08, 0.08)
+			local distance = rng:NextNumber(560, 880)
+			local base = Vector3.new(math.cos(angle) * distance, 0, math.sin(angle) * distance - 30)
+			local radius = rng:NextNumber(70, 150)
+			terrain:FillBall(base + Vector3.new(0, -radius * 0.35, 0), radius, M.Rock)
+			for _ = 1, 3 do
+				local r = radius * rng:NextNumber(0.35, 0.6)
+				terrain:FillBall(base + Vector3.new(rng:NextNumber(-radius, radius) * 0.4, radius * rng:NextNumber(0.35, 0.7),
+					rng:NextNumber(-radius, radius) * 0.4), r, rng:NextNumber() < 0.4 and M.Sandstone or M.Rock)
+			end
+			-- a sharp spire on some of them
+			if i % 3 == 0 then
+				local height = rng:NextNumber(90, 170)
+				terrain:FillBlock(CFrame.new(base + Vector3.new(0, height * 0.5, 0))
+					* CFrame.Angles(rng:NextNumber(-0.08, 0.08), rng:NextNumber(0, 3), rng:NextNumber(-0.08, 0.08)),
+					Vector3.new(height * 0.22, height, height * 0.2), M.Rock)
+			end
 		end
 	end
 	for _ = 1, 26 do
@@ -278,15 +339,6 @@ local function setupScenery()
 		if spot then
 			crystals(spot, scenery)
 		end
-	end
-	-- a few huge rock spires on the horizon
-	for i = 1, 8 do
-		local angle = (i / 8) * math.pi * 2 + 0.3
-		local spot = Vector3.new(math.cos(angle) * 520, 0, math.sin(angle) * 520 - 30)
-		local height = rng:NextNumber(60, 140)
-		part("Spire", Vector3.new(height * 0.35, height, height * 0.3),
-			CFrame.new(spot + Vector3.new(0, height * 0.42, 0)) * CFrame.Angles(rng:NextNumber(-0.1, 0.1), rng:NextNumber(0, 3), rng:NextNumber(-0.12, 0.12)),
-			Color3.fromRGB(62, 50, 78), Enum.Material.Slate, scenery)
 	end
 end
 
@@ -297,25 +349,53 @@ local function setupPath()
 	local path = Instance.new("Model")
 	path.Name = "Path"
 	path.Parent = world
-	-- glowing strips on each side of the walk from the spawn to the door
-	for _, x in ipairs({ -6.5, 6.5 }) do
-		part("PathEdge", Vector3.new(0.4, 0.15, 44), CFrame.new(x, 0.08, 8), CYAN, Enum.Material.Neon, path).CastShadow = false
+	-- the walk from the spawn to the door: stone pavers between metal curbs,
+	-- a glowing strip set into each curb
+	part("Walkway", Vector3.new(12.6, 0.1, 44), CFrame.new(0, 0.05, 8), Color3.fromRGB(88, 82, 100), Enum.Material.Pavement, path)
+	for z = -13.5, 29.5, 4 do
+		part("PaverJoint", Vector3.new(12.6, 0.12, 0.12), CFrame.new(0, 0.06, z), Color3.fromRGB(52, 46, 62),
+			Enum.Material.Concrete, path).CastShadow = false
 	end
-	part("Walkway", Vector3.new(12.6, 0.1, 44), CFrame.new(0, 0.05, 8), Color3.fromRGB(70, 66, 80), Enum.Material.Concrete, path)
-	-- lamp posts
+	for _, x in ipairs({ -6.6, 6.6 }) do
+		local curb = part("PathCurb", Vector3.new(0.9, 0.35, 44), CFrame.new(x, 0.17, 8), DARK_METAL, Enum.Material.Metal, path)
+		curb.Reflectance = 0.1
+		part("PathEdge", Vector3.new(0.25, 0.08, 43.4), CFrame.new(x, 0.36, 8), CYAN, Enum.Material.Neon, path).CastShadow = false
+	end
+	-- lamp posts: a plinth, a slim pole and an arm reaching over the walk,
+	-- with a lamp that throws a pool of light onto the path
 	for _, z in ipairs({ -10, 4, 18, 30 }) do
-		for _, x in ipairs({ -8, 8 }) do
-			part("LampPost", Vector3.new(0.4, 7, 0.4), CFrame.new(x, 3.5, z), DARK_METAL, Enum.Material.Metal, path)
-			local bulb = shaped(Enum.PartType.Ball, "LampGlobe", Vector3.new(1.3, 1.3, 1.3), CFrame.new(x, 7.4, z), CYAN,
+		for _, x in ipairs({ -8.4, 8.4 }) do
+			local inward = x < 0 and 1 or -1
+			local plinth = part("LampPlinth", Vector3.new(1.2, 0.8, 1.2), CFrame.new(x, 0.4, z), DARK_METAL, Enum.Material.Metal, path)
+			plinth.Reflectance = 0.08
+			local pole = part("LampPost", Vector3.new(0.35, 8, 0.35), CFrame.new(x, 4.6, z), DARK_METAL, Enum.Material.Metal, path)
+			pole.Reflectance = 0.12
+			part("LampRing", Vector3.new(0.55, 0.15, 0.55), CFrame.new(x, 2.2, z), Color3.fromRGB(255, 205, 90), Enum.Material.Foil, path)
+			part("LampArm", Vector3.new(2.2, 0.22, 0.22), CFrame.new(x + inward * 1, 8.5, z), DARK_METAL, Enum.Material.Metal, path)
+			part("LampHead", Vector3.new(1.4, 0.4, 0.9), CFrame.new(x + inward * 1.9, 8.4, z), DARK_METAL, Enum.Material.Metal, path)
+			local bulb = part("LampGlobe", Vector3.new(1.1, 0.12, 0.7), CFrame.new(x + inward * 1.9, 8.15, z), CYAN,
 				Enum.Material.Neon, path)
 			bulb.CastShadow = false
-			glow(bulb, 1.4, 16, CYAN)
+			local spot = Instance.new("SpotLight")
+			spot.Face = Enum.NormalId.Bottom
+			spot.Angle = 85
+			spot.Range = 22
+			spot.Brightness = 2.2
+			spot.Color = Color3.fromRGB(150, 230, 255)
+			spot.Shadows = true
+			spot.Parent = bulb
+			glow(bulb, 0.4, 9, CYAN)
 		end
 	end
 	-- the sign welcoming you in
 	local sign = part("WelcomeSign", Vector3.new(14, 2.6, 0.3), CFrame.new(0, 11, 30), Color3.fromRGB(26, 20, 40), nil, path)
 	for _, x in ipairs({ -6.6, 6.6 }) do
-		part("WelcomePost", Vector3.new(0.4, 9.8, 0.4), CFrame.new(x, 4.9, 30), DARK_METAL, Enum.Material.Metal, path)
+		part("WelcomePost", Vector3.new(0.5, 9.8, 0.5), CFrame.new(x, 4.9, 30), DARK_METAL, Enum.Material.Metal, path).Reflectance = 0.12
+	end
+	-- a gold frame around the sign
+	for _, r in ipairs({ { 0, 1.4, 14.4, 0.2 }, { 0, -1.4, 14.4, 0.2 }, { -7.1, 0, 0.2, 3 }, { 7.1, 0, 0.2, 3 } }) do
+		part("WelcomeFrame", Vector3.new(r[3], r[4], 0.45), CFrame.new(r[1], 11 + r[2], 30), Color3.fromRGB(255, 205, 90),
+			Enum.Material.Foil, path)
 	end
 	for _, face in ipairs({ Enum.NormalId.Front, Enum.NormalId.Back }) do
 		local gui = Instance.new("SurfaceGui")
@@ -375,7 +455,31 @@ local function setupLandingPad()
 		flame.CastShadow = false
 		local _ = engine
 	end
-	part("Stripe", Vector3.new(6.05, 0.5, 12), base * CFrame.new(0, 4.6, 1), Color3.fromRGB(255, 205, 90), Enum.Material.SmoothPlastic, ship)
+	part("Stripe", Vector3.new(6.05, 0.5, 12), base * CFrame.new(0, 4.6, 1), Color3.fromRGB(255, 205, 90), Enum.Material.Foil, ship)
+	-- polished hull, and a light on the cockpit
+	for _, piece in ipairs(ship:GetChildren()) do
+		if piece:IsA("BasePart") and piece.Material == Enum.Material.Metal then
+			piece.Reflectance = piece.Color.R > 0.8 and 0.18 or 0.1
+		end
+	end
+	glow(cockpit, 0.8, 8, Color3.fromRGB(120, 200, 255))
+	-- floodlights at the pad's corners, aimed at the shuttle
+	for i = 1, 4 do
+		local angle = (i / 4) * math.pi * 2 + math.rad(45)
+		local spot = PAD_CENTER + Vector3.new(math.cos(angle) * 22, 0, math.sin(angle) * 22)
+		part("FloodPost", Vector3.new(0.5, 5, 0.5), CFrame.new(spot + Vector3.new(0, 2.5, 0)), DARK_METAL, Enum.Material.Metal, pad)
+		local head = part("FloodLamp", Vector3.new(1.6, 1, 0.5), CFrame.lookAt(spot + Vector3.new(0, 5.2, 0), PAD_CENTER + Vector3.new(0, 3, 0)),
+			Color3.fromRGB(255, 240, 210), Enum.Material.Neon, pad)
+		head.CastShadow = false
+		local beam = Instance.new("SpotLight")
+		beam.Face = Enum.NormalId.Front
+		beam.Angle = 50
+		beam.Range = 34
+		beam.Brightness = 2.4
+		beam.Color = Color3.fromRGB(255, 236, 205)
+		beam.Shadows = true
+		beam.Parent = head
+	end
 	part("Ramp", Vector3.new(3.2, 0.3, 6), base * CFrame.new(0, 1.6, 10.5) * CFrame.Angles(math.rad(22), 0, 0), METAL,
 		Enum.Material.DiamondPlate, ship)
 	-- a stack of crates waiting for the next delivery
@@ -421,8 +525,17 @@ local function setupDomes()
 		local size = info[2]
 		local dome = shaped(Enum.PartType.Ball, "Dome", Vector3.new(size, size, size), CFrame.new(center), Color3.fromRGB(160, 220, 255),
 			Enum.Material.Glass, domes)
-		dome.Transparency = 0.45
-		disc("DomeRing", center + Vector3.new(0, 0.5, 0), size + 1.5, 1, METAL, Enum.Material.Metal, domes)
+		dome.Transparency = 0.55
+		dome.Reflectance = 0.25
+		disc("DomeRing", center + Vector3.new(0, 0.5, 0), size + 1.5, 1, METAL, Enum.Material.Metal, domes).Reflectance = 0.15
+		-- a ring of little lights around the base
+		local count = math.floor(size * 0.8)
+		for k = 1, count do
+			local a = (k / count) * math.pi * 2
+			local r = size / 2 + 0.75
+			part("DomeLight", Vector3.new(0.5, 0.25, 0.5), CFrame.new(center + Vector3.new(math.cos(a) * r, 1.1, math.sin(a) * r)),
+				CYAN, Enum.Material.Neon, domes).CastShadow = false
+		end
 		-- a glow inside, and plants growing under the glass
 		local lamp = part("DomeLamp", Vector3.new(1, 1, 1), CFrame.new(center + Vector3.new(0, size * 0.3, 0)), Color3.fromRGB(255, 230, 180),
 			Enum.Material.Neon, domes)

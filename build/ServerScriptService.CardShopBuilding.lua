@@ -800,6 +800,208 @@ do
 end
 Building.Cat = cat
 
+---------------------------------------------------------------------
+-- Premium finish: richer materials, ceiling and moldings, stone trim
+-- outside, and real light (spotlights on the art, the tables and the
+-- facade). Looks best with Lighting > Technology set to Future in Studio.
+---------------------------------------------------------------------
+do
+	local STONE = Color3.fromRGB(196, 186, 176)      -- light limestone trim outside
+	local STONE_DARK = Color3.fromRGB(64, 58, 72)    -- dark granite base band
+	local MARBLE_DARK = Color3.fromRGB(36, 32, 46)   -- black marble (counter, floor border)
+	local CEILING = Color3.fromRGB(34, 28, 48)
+
+	local function sameColor(a, b)
+		return math.abs(a.R - b.R) < 0.01 and math.abs(a.G - b.G) < 0.01 and math.abs(a.B - b.B) < 0.01
+	end
+
+	local function spotlight(name, from, to, angle, range, brightness, color, shadows, parent)
+		local can = Instance.new("Part")
+		can.Name = name
+		can.Anchored = true
+		can.CanCollide = false
+		can.CastShadow = false
+		can.Size = Vector3.new(0.45, 0.45, 0.7)
+		can.CFrame = CFrame.lookAt(from, to)
+		can.Color = TRIM
+		can.Material = Enum.Material.Metal
+		can.Parent = parent or model
+		local beam = Instance.new("SpotLight")
+		beam.Face = Enum.NormalId.Front
+		beam.Angle = angle
+		beam.Range = range
+		beam.Brightness = brightness
+		beam.Color = color or WARM_LIGHT
+		beam.Shadows = shadows == true
+		beam.Parent = can
+		return can
+	end
+
+	-- 1) materials: dark trim becomes brushed metal, painted walls plaster,
+	--    glass gets a reflection, the countertop black marble
+	for _, p in ipairs(model:GetDescendants()) do
+		if p:IsA("BasePart") then
+			if p.Material == Enum.Material.SmoothPlastic and sameColor(p.Color, TRIM) then
+				p.Material = Enum.Material.Metal
+				p.Reflectance = 0.06
+			elseif sameColor(p.Color, WALL_PAINT) then
+				p.Material = Enum.Material.Plaster
+			elseif p.Material == Enum.Material.Glass then
+				p.Reflectance = math.max(p.Reflectance or 0, 0.12)
+			end
+			if p.Name == "CounterTop" then
+				p.Color = MARBLE_DARK
+				p.Material = Enum.Material.Marble
+				p.Reflectance = 0.08
+			elseif p.Name == "Floor" then
+				p.Color = Color3.fromRGB(128, 86, 56) -- a deeper walnut
+			end
+		end
+	end
+
+	-- 2) the floor: a black marble border with a thin gold line
+	local finish = Instance.new("Model")
+	finish.Name = "Finish"
+	finish.Parent = model
+	local B = 1.2
+	for _, r in ipairs({
+		{ -W, W, -D, -D + B }, { -W, W, D - B, D }, { -W, -W + B, -D + B, D - B }, { W - B, W, -D + B, D - B },
+		}) do
+		box("FloorBorder", r[1], r[2], FLOOR, FLOOR + 0.02, r[3], r[4], MARBLE_DARK, Enum.Material.Marble, finish).Reflectance = 0.06
+	end
+	for _, r in ipairs({
+		{ -W + B, W - B, -D + B, -D + B + 0.15 }, { -W + B, W - B, D - B - 0.15, D - B },
+		{ -W + B, -W + B + 0.15, -D + B, D - B }, { W - B - 0.15, W - B, -D + B, D - B },
+		}) do
+		box("FloorInlay", r[1], r[2], FLOOR, FLOOR + 0.025, r[3], r[4], GOLD, Enum.Material.Foil, finish)
+	end
+
+	-- 3) a ceiling with wooden beams, crown molding and a glowing cove line
+	box("Ceiling", -W, W, H - 0.25, H, -D, D, CEILING, Enum.Material.Plaster, finish)
+	for _, x in ipairs({ -32, -16, 0, 16, 32 }) do
+		box("CeilingBeam", x - 0.5, x + 0.5, H - 1.1, H - 0.25, -D + 0.7, D - 0.5, WOOD_DARK, Enum.Material.Wood, finish)
+	end
+	for _, r in ipairs({
+		{ -W, -W + 0.5, -D, D }, { W - 0.5, W, -D, D }, { -W, W, D - 0.5, D }, { -W, W, -D, -D + 0.5 },
+		}) do
+		local molding = box("CrownMolding", r[1], r[2], H - 0.65, H - 0.25, r[3], r[4], TRIM, Enum.Material.Metal, finish)
+		molding.Reflectance = 0.06
+	end
+	for _, r in ipairs({
+		{ -W + 0.5, -W + 0.6, -D + 0.5, D - 0.5 }, { W - 0.6, W - 0.5, -D + 0.5, D - 0.5 }, { -W + 0.5, W - 0.5, -D + 0.5, -D + 0.6 },
+		}) do
+		box("CoveLight", r[1], r[2], H - 0.72, H - 0.65, r[3], r[4], NEON_PURPLE, Enum.Material.Neon, finish).CastShadow = false
+	end
+
+	-- 4) ceiling lamps: a metal shade over each glowing panel, and light that
+	--    falls downward in a soft pool (instead of a plain glow in every direction)
+	for _, lamp in ipairs(model:GetChildren()) do
+		if lamp.Name == "CeilingLight" then
+			for _, l in ipairs(lamp:GetChildren()) do
+				if l:IsA("PointLight") then
+					l.Brightness = 0.35
+					l.Range = 16
+				end
+			end
+			local pool = Instance.new("SurfaceLight")
+			pool.Face = Enum.NormalId.Bottom
+			pool.Angle = 110
+			pool.Range = 20
+			pool.Brightness = 1.5
+			pool.Color = WARM_LIGHT
+			pool.Shadows = true
+			pool.Parent = lamp
+			local c = lamp.Position - ORIGIN
+			box("LampShade", c.X - 2.7, c.X + 2.7, H - 2.05, H - 1.85, c.Z - 0.9, c.Z + 0.9, TRIM, Enum.Material.Metal, finish)
+		end
+	end
+
+	-- 5) spotlights on every poster, the playmat banner and the mural
+	for _, p in ipairs(model:GetDescendants()) do
+		if p:IsA("BasePart") and (p.Name:sub(1, 7) == "Poster_" or p.Name:sub(1, 7) == "Banner_" or p.Name == "Mural") then
+			local c = p.Position - ORIGIN
+			local from
+			if c.X < -W + 2 then
+				from = at(-W + 2.6, H - 1.5, c.Z)
+			elseif c.X > W - 2 then
+				from = at(W - 2.6, H - 1.5, c.Z)
+			else
+				from = at(c.X, H - 1.5, -D + 2.6)
+			end
+			spotlight("ArtLight", from, p.Position, 42, 16, 2.2, Color3.fromRGB(255, 236, 205), false, finish)
+		end
+	end
+
+	-- 6) a pool of light on each play table (and its felt)
+	for _, x in ipairs({ -24, -8, 8, 24 }) do
+		for _, dz in ipairs({ -4.5, 4.5 }) do
+			spotlight("TableLight", at(x, H - 0.45, 2 + dz), at(x, FLOOR + 3.5, 2), 48, 22, 1.8, WARM_LIGHT, true, finish)
+		end
+	end
+
+	-- 7) shelves and the singles case light up what's on them
+	for _, y in ipairs({ 5, 8.3, 11.6 }) do
+		local strip = box("ShelfLight", SX1, SX2, y - 0.4, y - 0.3, SZ + 1.55, SZ + 1.75, WARM_LIGHT, Enum.Material.Neon, finish)
+		strip.CastShadow = false
+		local down = Instance.new("SurfaceLight")
+		down.Face = Enum.NormalId.Bottom
+		down.Angle = 120
+		down.Range = 5
+		down.Brightness = 1.2
+		down.Color = WARM_LIGHT
+		down.Parent = strip
+	end
+	do
+		local caseLight = Instance.new("SurfaceLight")
+		caseLight.Face = Enum.NormalId.Bottom
+		caseLight.Angle = 120
+		caseLight.Range = 9
+		caseLight.Brightness = 1.6
+		caseLight.Color = Color3.fromRGB(225, 238, 255)
+		caseLight.Parent = caseTop
+	end
+
+	-- 8) outside: stone cornices, a granite base, stone pilasters, and lights
+	--    shining up the front of the building
+	local outside = Instance.new("Model")
+	outside.Name = "FacadeTrim"
+	outside.Parent = model
+	box("Cornice", -W - 1.6, W + 1.6, H + 5, H + 5.55, FZ1 - 0.3, FZ2 + 0.7, STONE, Enum.Material.Limestone, outside)
+	box("CorniceStep", -W - 1.3, W + 1.3, H + 4.7, H + 5, FZ2, FZ2 + 0.35, STONE, Enum.Material.Limestone, outside)
+	box("RoofCornice", -W - 1.4, W + 1.4, H + 1, H + 1.45, -D - 1.4, FZ1 - 0.3, STONE, Enum.Material.Limestone, outside)
+	for _, sideSign in ipairs({ -1, 1 }) do
+		local function xs(a, b)
+			if sideSign < 0 then
+				return -b, -a
+			end
+			return a, b
+		end
+		local x1, x2 = xs(DOOR_W + 0.1, W + 1.3)
+		box("BaseBand", x1, x2, 0, 1.1, FZ2, FZ2 + 0.3, STONE_DARK, Enum.Material.Granite, outside)
+		for _, range in ipairs({ { W, W + 1.4 }, { 6.4, 7.8 } }) do
+			local px1, px2 = xs(range[1], range[2])
+			box("Pilaster", px1, px2, 1.1, H + 4.7, FZ2, FZ2 + 0.35, STONE, Enum.Material.Limestone, outside)
+			local cx = (px1 + px2) / 2
+			spotlight("Uplight", at(cx, 0.35, FZ2 + 1.4), at(cx, H + 2, FZ2), 28, 26, 3, WARM_LIGHT, false, outside)
+		end
+		-- planters by the door, with glowing alien plants
+		local pxa, pxb = xs(9.5, 12.5)
+		local planter = box("Planter", pxa, pxb, 0.3, 2, FZ2 + 1, FZ2 + 3, STONE_DARK, Enum.Material.Granite, outside)
+		local mid = (pxa + pxb) / 2
+		for k = 1, 4 do
+			local blade = box("GlowPlant", mid - 0.15, mid + 0.15, 2, 2 + 1.6 + k * 0.5, FZ2 + 1.85, FZ2 + 2.15,
+				k % 2 == 0 and NEON_PURPLE or Color3.fromRGB(90, 220, 255), Enum.Material.Neon, outside)
+			blade.CastShadow = false
+			blade.CFrame = blade.CFrame * CFrame.new((k - 2.5) * 0.35, 0, 0) * CFrame.Angles(0, k * 0.8, math.rad((k - 2.5) * 12))
+		end
+		local plantGlow = Instance.new("PointLight")
+		plantGlow.Color = NEON_PURPLE
+		plantGlow.Brightness = 0.8
+		plantGlow.Range = 9
+		plantGlow.Parent = planter
+	end
+end
+
 -- Where the tables go (BattleTableServer builds them): one row across the room
 Building.TablePositions = {
 	at(-24, FLOOR, 2),

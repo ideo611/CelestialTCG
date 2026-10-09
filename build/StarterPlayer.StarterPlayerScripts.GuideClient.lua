@@ -560,6 +560,7 @@ local function updatePointer(t)
 		pointer.Position = UDim2.fromOffset(x0, y0 + 4 + 14 * press)
 		pointer.TextTransparency = 0
 	end
+	pointer:SetAttribute("Target", path[2] or path[1])
 	pointer.Visible = true
 	-- stuck for a while: say it another way
 	if step.Nudge and t - (state.StepShownAt or t) > (step.NudgeAfter or 10) and boxText.Text ~= step.Nudge then
@@ -604,7 +605,7 @@ local STEPS = {
 	{ Id = "lanes", Kind = "mine", Glow = { "Slot_Self_1", "Slot_Self_2" },
 		Focus = { "Hand", "Slot_Self_1", "Slot_Self_2", "Slot_Self_3", "Slot_Enemy_1", "Slot_Enemy_2", "Slot_Enemy_3", "EndTurnButton" },
 		Pointer = function()
-			return (not state.StepPlayed and Point.playUnit({ 1, 2, 3 })) or Point.endTurn
+			return (not state.StepPlayed and Point.playUnit({ 1, 2 })) or Point.endTurn
 		end,
 		Title = "LANES FIGHT", Text = "Units hit the lane straight across. Empty lane? It hits Selene! Play a unit, then End Turn." },
 	{ Id = "their_turn2", Kind = "theirs",
@@ -618,7 +619,7 @@ local STEPS = {
 		Title = "USE YOUR POWER", Text = "Tap Ability, then a unit: +2 Power this turn." },
 	{ Id = "spend", Kind = "mine", Glow = { "Hand", "EndTurnButton" },
 		Pointer = function()
-			return (not state.StepPlayed and Point.playUnit({ 1, 2, 3 })) or Point.endTurn
+			return (not state.StepPlayed and Point.playUnit({ 1, 2 })) or Point.endTurn
 		end,
 		Title = "SPEND YOUR ENERGY", Text = "You get 1 more energy every turn. Play a card, then End Turn." },
 	{ Id = "their_turn3", Kind = "theirs",

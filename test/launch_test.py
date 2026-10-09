@@ -203,9 +203,14 @@ for turn = 1, 14 do
 	local tp = guide:FindFirstChild("TutorialPointer", true)
 	local ttl = guide:FindFirstChild("TutorialTitle", true)
 	if tp and tp.Visible and ttl and guide:FindFirstChild("TutorialBox", true).Visible then pointedAt[ttl.Text] = true end
+	if tp and tp.Visible and ttl and ttl.Text ~= "SUMMON YOUR CELESTIAL" and tp:GetAttribute("Target") == "Slot_Self_3" then
+		pointedAt.BadLane3 = ttl.Text
+	end
 	actions:FireServer({ Kind = "EndTurn" })
 	M.run(12)
 end
+check("the hand never points a unit at lane 3 (kept for the Celestial)", pointedAt.BadLane3 == nil, tostring(pointedAt.BadLane3))
+pointedAt.BadLane3 = nil
 do
 	local names = {}
 	for k in pairs(pointedAt) do names[#names + 1] = k end

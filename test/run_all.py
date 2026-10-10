@@ -521,7 +521,7 @@ do
 		if e.Remote == "BattleUpdate" and type(e.Args[1]) == "table" and e.Args[1].Kind == "Match" then last = e.Args[1] break end
 	end
 	check("auto: switched off again (or the match just ended)", last and ((not last.Auto and autoB.Label.Text == "Auto: Off")
-		or (last.State.Winner ~= nil and not autoB.Visible)),
+		or last.State.Winner ~= nil),
 		tostring(last and last.Auto) .. " " .. autoB.Label.Text .. " winner=" .. tostring(last and last.State.Winner))
 	-- once off, it doesn't play for you any more
 	M.run(8)

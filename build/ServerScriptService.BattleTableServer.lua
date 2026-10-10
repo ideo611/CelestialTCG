@@ -656,6 +656,62 @@ local function createTable(index, position, parent, options)
 		}
 	end
 
+	-- The bot's deck: a starter deck's cards with a random Commander of that
+	-- faction and a random Celestial that pairs with it (so the bot isn't always
+	-- the same Commander + Celestial for each faction)
+	local function buildBotDeck(faction)
+		local order = CardDatabase.StarterDeckOrder
+		faction = faction or order[math.random(1, #order)]
+		local deck = buildDeck(faction)
+		local commanders, celestials = {}, {}
+		for _, card in ipairs(CardDatabase.GetAllCards()) do
+			if card.Type == "Commander" and card.Faction == faction then
+				table.insert(commanders, card.Id)
+			elseif card.Type == "Celestial" and table.find(card.PairsWith or {}, faction) then
+				table.insert(celestials, card.Id)
+			end
+		end
+		if #commanders > 0 then
+			deck.Commander = commanders[math.random(1, #commanders)]
+		end
+		if #celestials > 0 then
+			deck.Celestial = celestials[math.random(1, #celestials)]
+		end
+		-- cards only another Commander may use come out; extra copies of the deck's
+		-- other cards go in instead (keeping it at full size)
+		local cards, counts, removed = {}, {}, 0
+		for _, id in ipairs(deck.Cards) do
+			local card = CardDatabase.GetCard(id)
+			if card and card.CommanderOnly and card.CommanderOnly ~= deck.Commander then
+				removed = removed + 1
+			else
+				table.insert(cards, id)
+				counts[id] = (counts[id] or 0) + 1
+			end
+		end
+		local ids = {}
+		for id in pairs(counts) do
+			table.insert(ids, id)
+		end
+		table.sort(ids)
+		while removed > 0 do
+			local added = false
+			for _, id in ipairs(ids) do
+				if removed > 0 and counts[id] < CardDatabase.MaxCopiesFor(id) then
+					counts[id] = counts[id] + 1
+					table.insert(cards, id)
+					removed = removed - 1
+					added = true
+				end
+			end
+			if not added then
+				break
+			end
+		end
+		deck.Cards = cards
+		return deck
+	end
+
 	-- Each side's playmat: your equipped mat, or the bot's faction mat
 	local function matFor(seat)
 		local occupant = match.Seats[seat]
@@ -999,7 +1055,7 @@ local function createTable(index, position, parent, options)
 				match.Decks[1] = buildDeck(mine)
 				match.Finishes[1] = bestFinishes(player, match.Decks[1])
 				match.Votes[1] = 1
-				match.Decks[2] = buildDeck(#others > 0 and others[math.random(1, #others)] or mine)
+				match.Decks[2] = buildBotDeck(#others > 0 and others[math.random(1, #others)] or mine)
 				match.Votes[2] = 1
 				match.BotDifficulty = "Easy"
 				Analytics.Event(player, "first_match_quickstart", mine)
@@ -1116,8 +1172,7 @@ local function createTable(index, position, parent, options)
 				match.BotDifficulty = (wanted == "Hard" or wanted == "Normal") and wanted or "Easy" -- (Easy unless they picked)
 			end
 			if match.Seats[otherSeat] == BOT and not match.Decks[otherSeat] then
-				local order = CardDatabase.StarterDeckOrder
-				match.Decks[otherSeat] = buildDeck(order[math.random(1, #order)])
+				match.Decks[otherSeat] = buildBotDeck()
 			end
 			if match.Seats[otherSeat] and match.Decks[otherSeat] then
 				startMatch()

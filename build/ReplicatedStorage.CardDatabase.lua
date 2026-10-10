@@ -337,7 +337,7 @@ addCard {
 	Rarity = "Legendary",
 	HP = 20,
 	CommanderAbility = {
-		EnergyCost = 1,
+		EnergyCost = 2,
 		Text = "Give one of your units +1 Power and Grow 1.",
 		Effect = { Kind = "Multi", Target = "FriendlyUnit", Effects = {
 			{ Kind = "BuffUnit", Power = 1, Target = "FriendlyUnit" },
@@ -369,7 +369,7 @@ addCard {
 	Rarity = "Legendary",
 	HP = 20,
 	CommanderAbility = {
-		EnergyCost = 1,
+		EnergyCost = 2,
 		Text = "Your Commander takes 2 damage. Gain 3 energy this turn.",
 		Effect = { Kind = "PayForEnergy", HP = 2, Energy = 3 },
 	},
@@ -383,7 +383,7 @@ addCard {
 	Rarity = "Legendary",
 	HP = 20,
 	CommanderAbility = {
-		EnergyCost = 1,
+		EnergyCost = 2,
 		Text = "Deal 1 damage to an enemy unit. It gets -1 Power permanently (not below 1).",
 		Effect = { Kind = "Multi", Target = "EnemyUnit", Effects = {
 			{ Kind = "DamageUnit", Amount = 1, Target = "EnemyUnit" },

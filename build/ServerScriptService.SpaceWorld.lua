@@ -689,6 +689,22 @@ build("landing pad", setupLandingPad)
 build("radio dish", setupDish)
 build("domes", setupDomes)
 build("flatten", flattenSettlement)
+-- the place's spawn pad: players still appear on it, but it can't be seen
+-- (no grey slab with the spawn symbol on the path) and nobody trips on it
+build("spawn", function()
+	for _, d in ipairs(workspace:GetDescendants()) do
+		if d:IsA("SpawnLocation") then
+			d.Transparency = 1
+			d.CanCollide = false
+			d.CastShadow = false
+			for _, child in ipairs(d:GetChildren()) do
+				if child:IsA("Decal") or child:IsA("Texture") then
+					child:Destroy()
+				end
+			end
+		end
+	end
+end)
 build("rooting", function()
 	rootInGround(world)
 end)

@@ -839,8 +839,7 @@ payoffAgain.Activated:Connect(function()
 end)
 
 -- During a match that can earn the first-win ticket: a reminder of the prize
--- at the start and again mid-match (many new players walked out of their
--- first match before the end)
+-- at the start (many new players walked out of their first match before the end)
 local prizeToast = make("TextLabel", {
 	Name = "FirstWinToast",
 	AnchorPoint = Vector2.new(0.5, 0),
@@ -876,9 +875,6 @@ local function prizeReminder(events)
 			if turn <= 2 and not prizeShown.Start then
 				prizeShown.Start = true
 				message = "Win this match: FREE Booster Pack Ticket!"
-			elseif turn >= 9 and not prizeShown.Mid then
-				prizeShown.Mid = true
-				message = "Keep going! Win for your FREE Booster Pack Ticket"
 			end
 		end
 		if message then

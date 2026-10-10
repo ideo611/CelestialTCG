@@ -201,7 +201,9 @@ local TERRAIN_COLORS = {
 
 local function setupGround()
 	if terrain then
-		terrain.Decoration = false
+		pcall(function()
+			terrain.Decoration = false -- (not settable from scripts everywhere)
+		end)
 		for material, color in pairs(TERRAIN_COLORS) do
 			terrain:SetMaterialColor(material, color)
 		end
@@ -626,15 +628,23 @@ end)
 ---------------------------------------------------------------------
 -- Build it
 ---------------------------------------------------------------------
-if APPLY_LIGHTING then
-	setupLighting()
+-- each piece is built on its own: if one fails, the rest still appear
+-- (and the error shows in the Output window)
+local function build(name, fn)
+	local ok, err = pcall(fn)
+	if not ok then
+		warn(("SpaceWorld: %s failed: %s"):format(name, tostring(err)))
+	end
 end
-setupGround()
-setupScenery()
-setupPath()
-setupLandingPad()
-setupDish()
-setupDomes()
+if APPLY_LIGHTING then
+	build("lighting", setupLighting)
+end
+build("ground", setupGround)
+build("scenery", setupScenery)
+build("path", setupPath)
+build("landing pad", setupLandingPad)
+build("radio dish", setupDish)
+build("domes", setupDomes)
 world.Parent = workspace
 
 task.spawn(function()

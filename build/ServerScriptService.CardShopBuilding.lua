@@ -859,6 +859,16 @@ do
 		end
 	end
 
+	-- the building's walls, floor and sidewalk reach 4 studs into the ground, so
+	-- the planet's terrain never shows through a floor or under a wall
+	for _, p in ipairs(model:GetDescendants()) do
+		if p:IsA("Part") and p.Shape ~= Enum.PartType.Ball and p.Shape ~= Enum.PartType.Cylinder
+			and math.abs(p.Position.Y - p.Size.Y / 2) < 0.02 and p.CFrame.UpVector.Y > 0.999 then
+			p.Size = p.Size + Vector3.new(0, 4, 0)
+			p.CFrame = p.CFrame * CFrame.new(0, -2, 0)
+		end
+	end
+
 	-- 2) the floor: a black marble border with a thin gold line
 	local finish = Instance.new("Model")
 	finish.Name = "Finish"

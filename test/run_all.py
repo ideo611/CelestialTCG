@@ -625,6 +625,13 @@ do
 		tostring(counts.ArtLight) .. "/" .. tostring(counts.TableLight))
 	check("shop: stone facade trim with uplights", (counts.Pilaster or 0) == 4 and (counts.Uplight or 0) == 4)
 	local walnut = shop:FindFirstChild("Floor")
+	check("shop: the floor reaches below the ground", walnut.Position.Y - walnut.Size.Y / 2 < -3.9
+		and math.abs(walnut.Position.Y + walnut.Size.Y / 2 - 0.4) < 0.01)
+	local carved = 0
+	for _, e in ipairs(M.terrainLog) do
+		if (e.Kind == "FillBlock" or e.Kind == "FillCylinder") and e.Args[#e.Args] == Enum.Material.Air then carved = carved + 1 end
+	end
+	check("terrain cleared under the shop, path and landmarks", carved >= 8, carved)
 	check("shop: counter is marble", shop:FindFirstChild("CounterTop", true).Material == Enum.Material.Marble)
 	-- nothing new sits in the doorway or blocks the walk in
 	local ORIGIN = Vector3.new(0, 0, -50)
@@ -632,7 +639,7 @@ do
 	for _, d in ipairs(shop:GetDescendants()) do
 		if d:IsA("BasePart") and d.CanCollide ~= false then
 			local c = d.Position - ORIGIN
-			if math.abs(c.X) < 3.5 and c.Z > 22 and c.Z < 40 and c.Y - d.Size.Y / 2 < 5 and d.Size.Y > 0.5 then
+			if math.abs(c.X) < 3.5 and c.Z > 22 and c.Z < 40 and c.Y - d.Size.Y / 2 < 5 and c.Y + d.Size.Y / 2 > 0.6 then
 				table.insert(blocked, d.Name)
 			end
 		end

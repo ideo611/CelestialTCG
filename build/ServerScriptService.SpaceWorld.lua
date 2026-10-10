@@ -351,6 +351,8 @@ local function setupPath()
 	local path = Instance.new("Model")
 	path.Name = "Path"
 	path.Parent = world
+	-- solid ground under the whole walk (the terrain is cleared away here)
+	part("PathGround", Vector3.new(20, 4, 44), CFrame.new(0, -2, 8), GROUND, Enum.Material.Slate, path)
 	-- the walk from the spawn to the door: stone pavers between metal curbs,
 	-- a glowing strip set into each curb
 	part("Walkway", Vector3.new(12.6, 0.1, 44), CFrame.new(0, 0.05, 8), Color3.fromRGB(88, 82, 100), Enum.Material.Pavement, path)
@@ -423,7 +425,7 @@ local function setupLandingPad()
 	local pad = Instance.new("Model")
 	pad.Name = "LandingPad"
 	pad.Parent = world
-	disc("PadBase", PAD_CENTER + Vector3.new(0, 0.3, 0), 40, 0.6, Color3.fromRGB(90, 90, 104), Enum.Material.DiamondPlate, pad)
+	disc("PadBase", PAD_CENTER + Vector3.new(0, -1.7, 0), 40, 4.6, Color3.fromRGB(90, 90, 104), Enum.Material.DiamondPlate, pad)
 	disc("PadCircle", PAD_CENTER + Vector3.new(0, 0.62, 0), 26, 0.05, Color3.fromRGB(240, 200, 70), Enum.Material.SmoothPlastic, pad)
 	disc("PadInner", PAD_CENTER + Vector3.new(0, 0.66, 0), 24, 0.05, Color3.fromRGB(90, 90, 104), Enum.Material.DiamondPlate, pad)
 	-- landing lights around the edge (SpaceClient makes them blink)
@@ -496,7 +498,7 @@ local function setupDish()
 	local dish = Instance.new("Model")
 	dish.Name = "RadioDish"
 	dish.Parent = world
-	part("DishBase", Vector3.new(8, 2, 8), CFrame.new(DISH_CENTER + Vector3.new(0, 1, 0)), DARK_METAL, Enum.Material.Concrete, dish)
+	part("DishBase", Vector3.new(8, 6, 8), CFrame.new(DISH_CENTER + Vector3.new(0, -1, 0)), DARK_METAL, Enum.Material.Concrete, dish)
 	-- lattice tower
 	for _, c in ipairs({ { -2, -2 }, { 2, -2 }, { -2, 2 }, { 2, 2 } }) do
 		part("TowerLeg", Vector3.new(0.5, 26, 0.5), CFrame.new(DISH_CENTER + Vector3.new(c[1], 15, c[2]))
@@ -518,18 +520,59 @@ local function setupDish()
 	glow(tip, 2, 20, Color3.fromRGB(255, 60, 70))
 end
 
+-- Clear the terrain where buildings stand, so it can never poke up through a
+-- floor (the shop, its sidewalk, the path, the pad, the dish and the domes all
+-- have solid bases reaching below the ground instead)
+local DOMES = { { Vector3.new(0, 0, 0), 30 }, { Vector3.new(26, 0, 12), 20 }, { Vector3.new(-6, 0, 26), 16 } }
+local function flattenSettlement()
+	if not terrain then
+		return
+	end
+	local AIR = M.Air
+	local function clearBox(x1, x2, z1, z2)
+		terrain:FillBlock(CFrame.new((x1 + x2) / 2, 28, (z1 + z2) / 2), Vector3.new(x2 - x1, 64, z2 - z1), AIR)
+	end
+	local function clearRound(center, radius)
+		terrain:FillCylinder(CFrame.new(center.X, 28, center.Z), 64, radius, AIR)
+	end
+	local s = SHOP_CENTER
+	clearBox(s.X - 37, s.X + 37, s.Z - 27, s.Z + 27)   -- the shop
+	clearBox(s.X - 42, s.X + 42, s.Z + 26, s.Z + 36)   -- its sidewalk
+	clearBox(-10, 10, -14, 30)                           -- the path
+	clearRound(PAD_CENTER, 20)
+	clearBox(DISH_CENTER.X - 4, DISH_CENTER.X + 4, DISH_CENTER.Z - 4, DISH_CENTER.Z + 4)
+	for _, info in ipairs(DOMES) do
+		clearRound(DOMES_CENTER + info[1], (info[2] + 1.5) / 2)
+	end
+end
+
+-- Anything standing on the ground (y = 0) reaches 4 studs down, so no gap or
+-- sliver shows where it meets the terrain
+local function rootInGround(container)
+	for _, p in ipairs(container:GetDescendants()) do
+		if p:IsA("Part") and p.Shape ~= Enum.PartType.Ball and p.Shape ~= Enum.PartType.Cylinder then
+			local bottom = p.Position.Y - p.Size.Y / 2
+			local upright = p.CFrame.UpVector.Y > 0.999
+			if upright and math.abs(bottom) < 0.02 then
+				p.Size = p.Size + Vector3.new(0, 4, 0)
+				p.CFrame = p.CFrame * CFrame.new(0, -2, 0)
+			end
+		end
+	end
+end
+
 local function setupDomes()
 	local domes = Instance.new("Model")
 	domes.Name = "HabitatDomes"
 	domes.Parent = world
-	for i, info in ipairs({ { Vector3.new(0, 0, 0), 30 }, { Vector3.new(26, 0, 12), 20 }, { Vector3.new(-6, 0, 26), 16 } }) do
+	for i, info in ipairs(DOMES) do
 		local center = DOMES_CENTER + info[1]
 		local size = info[2]
 		local dome = shaped(Enum.PartType.Ball, "Dome", Vector3.new(size, size, size), CFrame.new(center), Color3.fromRGB(160, 220, 255),
 			Enum.Material.Glass, domes)
 		dome.Transparency = 0.55
 		dome.Reflectance = 0.25
-		disc("DomeRing", center + Vector3.new(0, 0.5, 0), size + 1.5, 1, METAL, Enum.Material.Metal, domes).Reflectance = 0.15
+		disc("DomeRing", center + Vector3.new(0, -1.5, 0), size + 1.5, 5, METAL, Enum.Material.Metal, domes).Reflectance = 0.15
 		-- a ring of little lights around the base
 		local count = math.floor(size * 0.8)
 		for k = 1, count do
@@ -645,6 +688,10 @@ build("path", setupPath)
 build("landing pad", setupLandingPad)
 build("radio dish", setupDish)
 build("domes", setupDomes)
+build("flatten", flattenSettlement)
+build("rooting", function()
+	rootInGround(world)
+end)
 world.Parent = workspace
 
 task.spawn(function()

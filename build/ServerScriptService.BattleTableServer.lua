@@ -596,7 +596,7 @@ local function createTable(index, position, parent, options)
 		end
 		if forfeit then
 			if isHuman(timedOut) then
-				leaveSeat(timedOut, seat)
+				leaveSeat(timedOut, seat, "timeout")
 				send(timedOut, { Kind = "Closed" })
 			end
 			return
@@ -848,7 +848,24 @@ local function createTable(index, position, parent, options)
 	end
 
 	-- A player gets up: leaving mid-match counts as conceding
-	leaveSeat = function(player, seat)
+	leaveSeat = function(player, seat, why)
+		-- a new player walking out of their first real match: when, and how it was going
+		-- ("R3 behind quit"), with the seconds played as the value
+		local leaving = match.Battle
+		if leaving and not leaving.Winner and not tutorial and not match.Replay and isHuman(player) then
+			local data = PlayerData.Get(player)
+			if data and (data.Stats.Wins + data.Stats.Losses) == 0 then
+				local mine, theirs = leaving.Players[seat], leaving.Players[3 - seat]
+				local round = math.ceil((leaving.Turn or 1) / 2)
+				local standing = "even"
+				if mine and theirs then
+					standing = mine.HP > theirs.HP and "ahead" or (mine.HP < theirs.HP and "behind" or "even")
+				end
+				Analytics.Event(player, "first_match_left",
+					("R%s %s %s"):format(round >= 10 and "10+" or tostring(round), standing, why or "quit"),
+					math.floor(os.clock() - (match.StartedAt or os.clock())))
+			end
+		end
 		match.Seats[seat] = nil
 		match.Decks[seat] = nil
 		local battle = match.Battle
@@ -1326,7 +1343,7 @@ end)
 Players.PlayerRemoving:Connect(function(player)
 	local t = tableOf(player)
 	if t then
-		t.Leave(player, t.SeatOf(player))
+		t.Leave(player, t.SeatOf(player), "disconnect")
 		if t.Virtual then
 			t.Close()
 		end

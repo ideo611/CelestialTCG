@@ -319,6 +319,24 @@ local quick = lastPayload("Match", before)
 check("first match: starts straight away with their starter vs the Easy bot",
 	quick ~= nil and PlayerData.Get(nik) and logged("first_match_quickstart") ~= nil
 	and logged("first_match_quickstart").Detail == "Solar", quick and quick.Kind)
+local toast = guide:FindFirstChild("FirstWinToast", true)
+check("first match: no prize reminder left over from the tutorial", not toast.Visible)
+actions:FireServer({ Kind = "Mulligan", Indexes = {} })
+M.run(3)
+check("first match: the free-ticket prize is shown", toast and toast.Visible, toast and toast.Text)
+-- walking out of the first match is recorded (when, and how it was going)
+actions:FireServer({ Kind = "Leave" })
+M.run(2)
+local left = logged("first_match_left")
+check("first match: leaving it is logged with the round and standing", left ~= nil and left.Detail:match("^R%d+ %a+ quit$") ~= nil,
+	left and left.Detail)
+-- and Play now still starts a fresh one-tap match
+before = #M.remoteLog
+playNow.Activated:Fire()
+M.run(1.5)
+check("first match: Play now works again after leaving", lastPayload("Match", before) ~= nil)
+M.run(5.5)
+check("the prize reminder hides after a few seconds", not toast.Visible)
 local openTables = 0
 for _, d in ipairs(workspace:GetDescendants()) do
 	if d.ClassName == "ProximityPrompt" and d.ActionText == "Practice vs Bot" and d.Enabled then openTables = openTables + 1 end

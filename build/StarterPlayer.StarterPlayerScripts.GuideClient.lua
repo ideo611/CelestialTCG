@@ -838,6 +838,61 @@ payoffAgain.Activated:Connect(function()
 	startPractice()
 end)
 
+-- During a match that can earn the first-win ticket: a reminder of the prize
+-- at the start and again mid-match (many new players walked out of their
+-- first match before the end)
+local prizeToast = make("TextLabel", {
+	Name = "FirstWinToast",
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.fromScale(0.44, 0.09),
+	Size = UDim2.fromScale(0.42, 0.06),
+	BackgroundColor3 = PANEL,
+	BackgroundTransparency = 0.1,
+	TextColor3 = GOLD,
+	TextScaled = true,
+	Font = Enum.Font.GothamBold,
+	Text = "",
+	Visible = false,
+	ZIndex = 40,
+}, gui)
+make("UICorner", { CornerRadius = UDim.new(0.5, 0) }, prizeToast)
+make("UIStroke", { Color = GOLD, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, prizeToast)
+make("UIPadding", { PaddingLeft = UDim.new(0.04, 0), PaddingRight = UDim.new(0.04, 0),
+	PaddingTop = UDim.new(0.12, 0), PaddingBottom = UDim.new(0.12, 0) }, prizeToast)
+local prizeShown = {} -- [turn] = true, for the match on screen
+local function prizeReminder(events)
+	local summary = state.Summary
+	if state.Tutorial or not (summary and summary.FirstWinAvailable and (summary.FirstWinTickets or 0) > 0) then
+		return
+	end
+	for _, e in ipairs(events or {}) do
+		local message = nil
+		if e.Type == "TurnStarted" then
+			local turn = e.Turn or 0
+			if turn < (prizeShown.LastTurn or 0) then
+				prizeShown = {} -- (the turns started over: a new game)
+			end
+			prizeShown.LastTurn = turn
+			if turn <= 2 and not prizeShown.Start then
+				prizeShown.Start = true
+				message = "Win this match: FREE Booster Pack Ticket!"
+			elseif turn >= 9 and not prizeShown.Mid then
+				prizeShown.Mid = true
+				message = "Keep going! Win for your FREE Booster Pack Ticket"
+			end
+		end
+		if message then
+			prizeToast.Text = message
+			prizeToast.Visible = true
+			task.delay(5, function()
+				if prizeToast.Text == message then
+					prizeToast.Visible = false
+				end
+			end)
+		end
+	end
+end
+
 -- The match summary, once the battle screen has closed
 showSummary = function(series)
 	local EconomyConfig = require(ReplicatedStorage:WaitForChild("EconomyConfig"))
@@ -923,6 +978,9 @@ battleUpdate.OnClientEvent:Connect(function(payload)
 		return
 	end
 	if payload.Kind == "Match" then
+		if not payload.Tutorial then
+			prizeReminder(payload.Events)
+		end
 		local s = payload.State
 		if payload.TurnEndsIn and s and not s.Winner then
 			state.TurnEndsAt = os.clock() + payload.TurnEndsIn

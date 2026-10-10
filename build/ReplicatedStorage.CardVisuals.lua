@@ -585,7 +585,7 @@ local function rainbow(cycles)
 end
 local FOIL = rainbow(FOIL_CYCLES)
 local RAINBOW = rainbow(1)
-local PRISM = rainbow(7) -- (many bands of color, so the flash shows the whole rainbow)
+local PRISM = rainbow(4) -- (several bands of color, so the flash shows the whole rainbow; Roblox allows at most 20 color stops)
 local GOLD_SHEEN = ColorSequence.new({
 	ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 225, 130)),
 	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 255, 235)),

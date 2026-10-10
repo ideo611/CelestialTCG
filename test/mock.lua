@@ -123,16 +123,28 @@ Color3 = {
 	end,
 }
 
+-- the same rules Roblox enforces (it errors otherwise)
+function M.checkKeypoints(kind, keys)
+	if #keys > 20 then error(kind .. ": at most 20 keypoints (got " .. #keys .. ")", 3) end
+	if #keys < 2 or keys[1].Time ~= 0 or math.abs(keys[#keys].Time - 1) > 1e-9 then
+		error(kind .. ": must start at time 0 and end at time 1", 3)
+	end
+	for i = 2, #keys do
+		if keys[i].Time < keys[i - 1].Time then error(kind .. ": keypoint times must go up", 3) end
+	end
+end
 local SEQ = datatype("ColorSequence", {})
 ColorSequenceKeypoint = { new = function(t, c) return { Time = t, Value = c } end }
 ColorSequence = { new = function(a, b)
 	if getmetatable(a) == C3 then return setmetatable({ Keypoints = { ColorSequenceKeypoint.new(0, a), ColorSequenceKeypoint.new(1, b or a) } }, SEQ) end
+	M.checkKeypoints("ColorSequence", a)
 	return setmetatable({ Keypoints = a }, SEQ)
 end }
 local NSEQ = datatype("NumberSequence", {})
 NumberSequenceKeypoint = { new = function(t, v, e) return { Time = t, Value = v, Envelope = e or 0 } end }
 NumberSequence = { new = function(a, b)
 	if type(a) == "number" then return setmetatable({ Keypoints = { NumberSequenceKeypoint.new(0, a), NumberSequenceKeypoint.new(1, b or a) } }, NSEQ) end
+	M.checkKeypoints("NumberSequence", a)
 	return setmetatable({ Keypoints = a }, NSEQ)
 end }
 NumberRange = { new = function(a, b) return { Min = a, Max = b or a } end }

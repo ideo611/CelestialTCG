@@ -485,6 +485,59 @@ do
 	check("drag: dropping a unit on a lane plays it", played)
 	check("drag: the dragged copy is gone after the drop", battleGui:FindFirstChild("DraggedCard", true) == nil)
 end
+-- Auto (against the bot): the Normal bot plays your turns until you switch it off
+do
+	local autoB = battleGui and battleGui:FindFirstChild("AutoButton", true)
+	check("auto: the button shows against the bot", autoB and autoB.Visible)
+	local mark = #M.remoteLog
+	local mySeat
+	for k = #M.remoteLog, 1, -1 do
+		local e = M.remoteLog[k]
+		if e.Remote == "BattleUpdate" and type(e.Args[1]) == "table" and e.Args[1].Kind == "Match" then mySeat = e.Args[1].Seat break end
+	end
+	if autoB then autoB.Activated:Fire() end
+	M.run(0.5)
+	check("auto: the button says ON", autoB and autoB.Label.Text == "Auto: ON", autoB and autoB.Label.Text)
+	M.run(9)
+	local myPlays, myTurnsEnded = 0, 0
+	for k = mark + 1, #M.remoteLog do
+		local e = M.remoteLog[k]
+		if e.Remote == "BattleUpdate" and type(e.Args[1]) == "table" then
+			for _, ev in ipairs(e.Args[1].Events or {}) do
+				if (ev.Type == "UnitPlayed" or ev.Type == "SpellCast") and ev.Player == mySeat then myPlays = myPlays + 1 end
+				if ev.Type == "TurnStarted" and ev.Player ~= mySeat then myTurnsEnded = myTurnsEnded + 1 end
+			end
+		end
+	end
+	check("auto: it plays and ends your turns for you", myPlays >= 1 and myTurnsEnded >= 1, myPlays .. " plays, " .. myTurnsEnded .. " turns")
+	local logged = false
+	for _, e in ipairs(require(game:GetService("ServerScriptService").Analytics).Recent) do if e.Name == "auto_battle" and e.Detail == "on" then logged = true end end
+	check("auto: switching it on is logged", logged)
+	autoB.Activated:Fire()
+	M.run(0.5)
+	local last
+	for k = #M.remoteLog, mark + 1, -1 do
+		local e = M.remoteLog[k]
+		if e.Remote == "BattleUpdate" and type(e.Args[1]) == "table" and e.Args[1].Kind == "Match" then last = e.Args[1] break end
+	end
+	check("auto: switched off again (or the match just ended)", last and ((not last.Auto and autoB.Label.Text == "Auto: Off")
+		or (last.State.Winner ~= nil and not autoB.Visible)),
+		tostring(last and last.Auto) .. " " .. autoB.Label.Text .. " winner=" .. tostring(last and last.State.Winner))
+	-- once off, it doesn't play for you any more
+	M.run(8)
+	local markOff = #M.remoteLog
+	M.run(12)
+	local playedAfter = false
+	for k = markOff + 1, #M.remoteLog do
+		local e = M.remoteLog[k]
+		if e.Remote == "BattleUpdate" and type(e.Args[1]) == "table" then
+			for _, ev in ipairs(e.Args[1].Events or {}) do
+				if (ev.Type == "UnitPlayed" or ev.Type == "EndTurn" or ev.Type == "TurnEnded") and ev.Player == mySeat then playedAfter = true end
+			end
+		end
+	end
+	check("auto: off means hands-on again", not playedAfter)
+end
 for i = 1, 4 do
 	actions:FireServer({ Kind = "EndTurn" })
 	M.run(6)

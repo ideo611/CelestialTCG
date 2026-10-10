@@ -680,6 +680,22 @@ local seriesLabel = label(root, {
 	Text = "",
 })
 
+-- Auto (against the bot): the Normal bot plays your turns. Top bar, where the
+-- turn timer goes in matches against people (there's no timer against the bot).
+PICK.AutoButton = button(root, "AutoButton", "Auto: Off", UDim2.fromScale(0.62, 0.008), UDim2.fromScale(0.135, 0.047),
+	TINT.Grey)
+PICK.AutoButton.Visible = false
+-- its look: what they just tapped wins over updates still being animated from before
+function PICK.RefreshAuto()
+	local on = PICK.AutoWanted
+	if on == nil then
+		on = PICK.AutoServer == true
+	end
+	setLabel(PICK.AutoButton, on and "Auto: ON" or "Auto: Off")
+	setTint(PICK.AutoButton, on and TINT.Spark or TINT.Grey, true)
+	setStroke(PICK.AutoButton, on and Color3.fromRGB(120, 220, 255) or nil, 3)
+end
+
 local gameOverLabel = label(root, {
 	Name = "GameOver",
 	Position = UDim2.fromScale(0.13, 0.27),
@@ -1686,6 +1702,8 @@ function render()
 	elseif state.Phase == "Mulligan" then
 		statusLabel.Text = me.MulliganDone and "Waiting for your opponent to choose their hand..."
 			or "Choose your starting hand."
+	elseif isMyTurn() and (PICK.AutoWanted or (PICK.AutoWanted == nil and current.Auto)) then
+		statusLabel.Text = "Auto is playing your turn..."
 	elseif isMyTurn() then
 		statusLabel.Text = "Your turn: play cards, then End Turn."
 	else
@@ -1945,6 +1963,8 @@ function render()
 	if seriesLabel.Visible then
 		seriesLabel.Text = ("Bo%d  %d - %d"):format(series.BestOf, myWins, theirWins)
 	end
+	PICK.AutoButton.Visible = current.CanAuto == true and not state.Winner
+	PICK.RefreshAuto()
 
 	if state.Winner then
 		gameOverLabel.Visible = true
@@ -3441,6 +3461,19 @@ sparkButton.Activated:Connect(function()
 	end
 end)
 
+PICK.AutoButton.Activated:Connect(function()
+	if not (current and current.CanAuto) then
+		return
+	end
+	local shown = PICK.AutoWanted
+	if shown == nil then
+		shown = PICK.AutoServer == true
+	end
+	PICK.AutoWanted = not shown -- (shown right away; cleared once the server's updates agree)
+	send({ Kind = "SetAuto", On = PICK.AutoWanted })
+	PICK.RefreshAuto()
+end)
+
 endTurnButton.Activated:Connect(function()
 	if isMyTurn() then
 		selected = nil
@@ -3612,6 +3645,12 @@ updateRemote.OnClientEvent:Connect(function(payload)
 		waitingFrame.Visible = true
 		waitingLabel.Text = payload.Message
 	elseif payload.Kind == "Match" then
+		-- Auto, as the server has it right now (the board may still be animating older updates)
+		PICK.AutoServer = payload.Auto == true
+		if PICK.AutoWanted ~= nil and PICK.AutoServer == PICK.AutoWanted then
+			PICK.AutoWanted = nil
+		end
+		PICK.RefreshAuto()
 		-- once per game: list the finishes the server sent (shows in Studio's Output window)
 		if payload.Finishes and payload.State and payload.State.Turn ~= lastFinishReport then
 			if not lastFinishReport or payload.State.Turn < lastFinishReport then
@@ -3656,6 +3695,8 @@ updateRemote.OnClientEvent:Connect(function(payload)
 			render()
 		end
 	elseif payload.Kind == "Closed" then
+		PICK.AutoWanted = nil
+		PICK.AutoServer = false
 		for i = #updateQueue, 1, -1 do
 			table.remove(updateQueue, i)
 		end

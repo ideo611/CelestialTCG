@@ -390,6 +390,9 @@ local function createTable(index, position, parent, options)
 					TurnEndsIn = match.TurnEndsAt and math.max(0, match.TurnEndsAt - os.clock()) or nil,
 					TurnSeconds = match.TurnEndsAt and TURN_SECONDS or nil,
 					Tutorial = tutorial or nil,
+					-- Auto: the Normal bot plays your turns for you (only against the bot)
+					CanAuto = (match.Seats[3 - seat] == BOT and not tutorial and not match.Replay) or nil,
+					Auto = (match.Auto and match.Auto[seat]) or nil,
 				})
 			end
 		end
@@ -422,6 +425,7 @@ local function createTable(index, position, parent, options)
 		match.Seats = {}
 		match.Decks = {}
 		match.Votes = {}
+		match.Auto = nil
 		match.Finishes = {}
 		match.Mats = nil
 		match.Series = nil
@@ -455,6 +459,37 @@ local function createTable(index, position, parent, options)
 		end, function()
 			task.wait(tutorial and TUTORIAL_BOT_DELAY or BOT_ACTION_DELAY)
 		end, botDifficulty())
+		if match.Battle == battle then
+			afterAction()
+		end
+	end
+
+	-- Auto: the Normal bot plays a player's turn (they can switch it off any
+	-- time; it stops before its next move)
+	local AUTO_LEVEL = "Normal"
+	local function autoOn(seat)
+		return match.Auto ~= nil and match.Auto[seat] == true
+	end
+	local function runAutoTurn(battle, seat)
+		if match.AutoRunning then
+			return
+		end
+		match.AutoRunning = true
+		local stopped = {} -- (thrown to stop the bot mid-turn when Auto is switched off)
+		local ok, err = pcall(BattleBot.TakeTurn, battle, seat, function(events)
+			if match.Battle == battle then
+				sendMatchUpdate(events)
+			end
+		end, function()
+			task.wait(BOT_ACTION_DELAY)
+			if match.Battle ~= battle or not autoOn(seat) then
+				error(stopped)
+			end
+		end, AUTO_LEVEL)
+		match.AutoRunning = false
+		if not ok and err ~= stopped then
+			warn("Auto turn failed: " .. tostring(err))
+		end
 		if match.Battle == battle then
 			afterAction()
 		end
@@ -576,6 +611,8 @@ local function createTable(index, position, parent, options)
 		end
 		if match.Seats[battle.Current] == BOT then
 			task.spawn(runBotTurn, battle, battle.Current)
+		elseif autoOn(battle.Current) and battle.Phase ~= "Mulligan" and not match.AutoRunning then
+			task.spawn(runAutoTurn, battle, battle.Current)
 		end
 	end
 
@@ -706,9 +743,20 @@ local function createTable(index, position, parent, options)
 			end
 		end
 		for seat = 1, 2 do
-			if match.Seats[seat] == BOT then
+			local occupant = match.Seats[seat]
+			if occupant == BOT then
 				task.delay(1, function()
 					mulligan(seat, BattleBot.ChooseMulliganFor(botDifficulty() or "Hard", battle, seat))
+				end)
+			elseif isHuman(occupant) and not tutorial and not match.Replay and match.Seats[3 - seat] == BOT
+				and occupant:GetAttribute("AutoBattle") == true then
+				-- they left Auto on last match: this one plays itself too (starting hand included)
+				match.Auto = match.Auto or {}
+				match.Auto[seat] = true
+				task.delay(1, function()
+					if autoOn(seat) then
+						mulligan(seat, BattleBot.ChooseMulliganFor(AUTO_LEVEL, battle, seat))
+					end
 				end)
 			end
 		end
@@ -1083,6 +1131,33 @@ local function createTable(index, position, parent, options)
 
 		local battle = match.Battle
 		if not battle or battle.Winner then
+			return
+		end
+
+		-- Auto on/off (against the bot only). It's remembered for the rest of the
+		-- player's visit, so their next match starts on Auto too.
+		if action.Kind == "SetAuto" then
+			if tutorial or match.Seats[3 - seat] ~= BOT then
+				return
+			end
+			local on = action.On == true
+			match.Auto = match.Auto or {}
+			if (match.Auto[seat] == true) == on then
+				return
+			end
+			match.Auto[seat] = on
+			player:SetAttribute("AutoBattle", on)
+			Analytics.Event(player, "auto_battle", on and "on" or "off", math.ceil((battle.Turn or 0) / 2))
+			-- still choosing a starting hand: Auto keeps the bot's pick
+			if on and battle.Phase == "Mulligan" and battle.Players[seat] and not battle.Players[seat].MulliganDone then
+				local okM, events = battle:Mulligan(seat, BattleBot.ChooseMulliganFor(AUTO_LEVEL, battle, seat))
+				if okM then
+					sendMatchUpdate(events)
+				end
+			else
+				sendMatchUpdate({})
+			end
+			afterAction()
 			return
 		end
 

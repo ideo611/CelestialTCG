@@ -548,17 +548,19 @@ CardVisuals.MythicAura = "None"
 
 -- What each finish adds (numbers are see-through amounts: lower = stronger)
 local FINISH_FX = {
-	-- Holo: a classic holo art box (rainbow foil sliding across the art, plus a glare)
-	Holo = { ArtFoil = 0.5, Glare = 0.06 },
+	-- Holo: a classic holo art box: a diagonal rainbow sheen over the art, and as
+	-- the light sweeps across, a bright band of rainbow leading a white glare
+	-- (Prism = how strong that rainbow band is; lower = stronger)
+	Holo = { ArtFoil = 0.36, Glare = 0.02, Prism = 0.22 },
 	-- Textured: embossed swirls etched across the card, catching the rainbow,
 	-- and a rainbow shimmer running around the frame
-	Textured = { ArtFoil = 0.68, CardFoil = 0.82, Glare = 0.1, Pattern = "Etched", PatternStrength = 0.5,
+	Textured = { ArtFoil = 0.55, Prism = 0.3, CardFoil = 0.82, Glare = 0.1, Pattern = "Etched", PatternStrength = 0.5,
 		PatternTile = 0.5, FrameShine = "Rainbow" },
 	-- 3D: lifted off the table (shadow, gentle bob), deep parallax, gold shimmer on the frame
-	["3D"] = { ArtFoil = 0.6, Glare = 0.1, Float = true, Lift = true, FrameShine = "Gold" },
+	["3D"] = { ArtFoil = 0.5, Prism = 0.28, Glare = 0.1, Float = true, Lift = true, FrameShine = "Gold" },
 	-- Mythic: the galaxy foil over the whole card (UiAssets.Holo.Galaxy), colors
 	-- cycling, a rainbow frame shimmer and glints popping up
-	Mythic = { ArtFoil = 0.68, CardFoil = 0.74, Glare = 0.08, FrameShine = "Rainbow", CycleColors = true, Aura = true },
+	Mythic = { ArtFoil = 0.68, Prism = 0.3, CardFoil = 0.74, Glare = 0.08, FrameShine = "Rainbow", CycleColors = true, Aura = true },
 }
 
 -- The foil is a rainbow that repeats exactly every FOIL_PERIOD. It slides by
@@ -583,6 +585,7 @@ local function rainbow(cycles)
 end
 local FOIL = rainbow(FOIL_CYCLES)
 local RAINBOW = rainbow(1)
+local PRISM = rainbow(7) -- (many bands of color, so the flash shows the whole rainbow)
 local GOLD_SHEEN = ColorSequence.new({
 	ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 225, 130)),
 	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 255, 235)),
@@ -640,7 +643,8 @@ local function step()
 			or (sweep and t - info.Added > 2 and not object:IsDescendantOf(game)) then
 			animated[object] = nil
 		elseif info.Kind == "Glare" then
-			object.Offset = info.Manual and Vector2.new(info.Manual, 0) or glareOffset(t, info.Phase)
+			object.Offset = (info.Manual and Vector2.new(info.Manual, 0) or glareOffset(t, info.Phase))
+				+ Vector2.new(info.Lead or 0, 0) -- (the rainbow band trails just behind the light)
 		elseif info.Kind == "Foil" then
 			-- slides exactly one repeat, then wraps to an identical picture
 			local shift = ((t * info.Speed + info.Phase) % FOIL_PERIOD) - FOIL_PERIOD / 2
@@ -706,6 +710,9 @@ local function animate(object, kind, phase, extra)
 		if info.Tile then
 			object:SetAttribute("CardAnimTile", info.Tile)
 		end
+		if info.Lead then
+			object:SetAttribute("CardAnimLead", info.Lead)
+		end
 		return
 	end
 	animated[object] = info
@@ -724,6 +731,7 @@ function CardVisuals.AnimateWorld(root)
 				Speed = object:GetAttribute("CardAnimSpeed"),
 				X = object:GetAttribute("CardAnimX"),
 				Tile = object:GetAttribute("CardAnimTile"),
+				Lead = object:GetAttribute("CardAnimLead"),
 			})
 		end
 	end
@@ -890,7 +898,22 @@ local function addFinish(face, artHolder, finish, frameImage, inner, corner, car
 
 	-- Rainbow foil over the art, and a bright glare sweeping across it
 	artHolder.ClipsDescendants = true
-	local _, artFoil = gradientLayer(artHolder, "HoloFoil", 1, FOIL, foilTransparency(fx.ArtFoil), 0, true)
+	local _, artFoil = gradientLayer(artHolder, "HoloFoil", 1, FOIL, foilTransparency(fx.ArtFoil), 25, true)
+	-- a rainbow band riding along with the glare (the holo "flash")
+	if fx.Prism then
+		local p = fx.Prism
+		local _, prism = gradientLayer(artHolder, "HoloPrism", 1, PRISM, NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1),
+			NumberSequenceKeypoint.new(0.34, 1),
+			NumberSequenceKeypoint.new(0.44, math.min(1, p + 0.25)),
+			NumberSequenceKeypoint.new(0.5, p),
+			NumberSequenceKeypoint.new(0.56, math.min(1, p + 0.25)),
+			NumberSequenceKeypoint.new(0.66, 1),
+			NumberSequenceKeypoint.new(1, 1),
+		}), 25)
+		prism.Offset = Vector2.new(1.6, 0)
+		animate(prism, "Glare", phase, { Lead = -0.14 })
+	end
 	local _, glare = gradientLayer(artHolder, "HoloBand", 1, ColorSequence.new(Color3.fromRGB(255, 255, 255)),
 		bandTransparency(fx.Glare), 25)
 	glare.Offset = Vector2.new(1.6, 0)
@@ -930,7 +953,7 @@ local function addFinish(face, artHolder, finish, frameImage, inner, corner, car
 	-- the card's faction pattern in the foil (not on Mythic, which has its galaxy)
 	local factionPattern = card and UiAssets.Holo and UiAssets.Holo.Faction and UiAssets.Holo.Faction[card.Faction]
 	if factionPattern and finish ~= "Mythic" then
-		foilTexture(artHolder, factionPattern, aw, ah, 0.1, phase, 1, 0, true)
+		foilTexture(artHolder, factionPattern, aw, ah, 0.05, phase, 1, 0, true, finish == "Holo" and 0.5 or nil)
 	end
 	-- 3D: tiny sparkles over the art, flaring up as the light passes
 	if finish == "3D" then

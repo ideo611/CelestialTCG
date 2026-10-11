@@ -1,0 +1,409 @@
+<style>
+  .cp { font-family: var(--font-anthropic-sans); display: grid; gap: var(--cds-gap-xl); }
+  .cp h1 { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); margin: 0; text-wrap: balance; }
+  .cp h2 { font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); margin: 0; }
+  .cp .lede { color: var(--color-fg-muted); margin: var(--cds-gap-xs) 0 0; max-width: 70ch; line-height: 1.5; }
+  .cp .note { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); margin: 2px 0 var(--cds-gap-md); line-height: 1.45; }
+  .cp .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); gap: var(--cds-gap-md); }
+  .cp .tile, .cp .card { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); min-width: 0; }
+  .cp .tile .lbl { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+  .cp .tile .num { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); font-variant-numeric: tabular-nums; margin-top: var(--cds-gap-xs); min-height: 1.2em; }
+  .cp .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); gap: var(--cds-gap-md); }
+  .cp .scroll { overflow-x: auto; }
+  .cp table { border-collapse: collapse; width: 100%; font-size: var(--cds-font-size-body); font-variant-numeric: tabular-nums; }
+  .cp th { text-align: left; font-weight: var(--cds-font-weight-medium); color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); padding: 6px 8px; border-bottom: 1px solid var(--color-border-line); white-space: nowrap; }
+  .cp td { padding: 7px 8px; border-bottom: 1px solid var(--color-border-line); vertical-align: top; }
+  .cp td.n, .cp th.n { text-align: right; }
+  .cp .heat td.cell { text-align: center; min-width: 2.6rem; font-weight: var(--cds-font-weight-medium); border-radius: 6px; border: 2px solid var(--color-panel); }
+  .cp .heat td.zero { color: var(--color-bad); }
+  .cp .heat th.c { text-align: center; }
+  .cp .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: var(--cds-font-size-caption); border: 1px solid var(--color-border-line); white-space: nowrap; }
+  .cp .pill.bad { color: var(--color-bad); }
+  .cp .pill.ok { color: var(--color-ok); }
+  .cp .pill.warn { color: var(--color-warn); }
+  .cp .why { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); line-height: 1.45; min-width: 18rem; }
+  .cp .need { min-width: 12rem; }
+  .cp .rank { font-family: var(--font-anthropic-serif); font-size: var(--cds-font-size-heading); color: var(--color-fg-muted); width: 2rem; }
+  .cp .chart { min-height: 210px; position: relative; }
+  .cp .tip { position: absolute; pointer-events: none; background: var(--cds-surface-popover); border: 1px solid var(--cds-border); border-radius: var(--cds-radius); box-shadow: var(--cds-shadow-popover); padding: var(--cds-pad-xs) var(--cds-pad-sm); font-size: var(--cds-font-size-caption); white-space: nowrap; }
+  .cp .tip .k { color: var(--cds-text-secondary); }
+  .cp .bar { position: relative; height: 10px; border-radius: 999px; background: var(--cds-chart-grid); min-width: 80px; }
+  .cp .bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; }
+  .cp .bar b.mid { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--cds-chart-reference); }
+  .cp .controls { display: flex; flex-wrap: wrap; gap: var(--cds-gap-sm); margin-bottom: var(--cds-gap-md); }
+  .cp .controls input, .cp .controls select { font: inherit; padding: 6px 10px; border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); background: var(--color-bg); color: var(--color-fg); min-width: 0; }
+  .cp .controls input { flex: 1 1 14rem; }
+  .cp .tablebox { max-height: 34rem; overflow: auto; }
+  .cp .tablebox th { position: sticky; top: 0; background: var(--color-panel); z-index: 1; }
+  .cp th button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+  .cp th button:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+  .cp .muted { color: var(--color-fg-muted); }
+  .cp .txt { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); max-width: 36ch; }
+  .cp .count { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+  .cp [data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
+  @media (max-width: 640px) { .cp .hide-narrow { display: none; } }
+</style>
+
+<div class="cp">
+  <header id="top">
+    <h1>Celestial Card Pool</h1>
+    <p class="lede"><span class="dash-skeleton" data-source="totals" data-field="in_game">—</span> cards are in the game and
+      <span class="dash-skeleton" data-source="totals" data-field="waiting">—</span> more are waiting for art.
+      Each faction has <span class="dash-skeleton" data-source="totals" data-field="min_faction">—</span>–<span class="dash-skeleton" data-source="totals" data-field="max_faction">—</span>
+      unit and spell cards; <span class="dash-skeleton lx-weak-name" data-source="weakest" data-field="faction">—</span> is the weakest faction,
+      winning <span class="dash-skeleton lx-weak-wr" data-source="weakest" data-field="win_rate">—</span>% of simulated games.</p>
+  </header>
+
+  <section class="tiles" id="totals">
+    <div class="tile"><div class="lbl">In the game</div><div class="num dash-skeleton" data-source="totals" data-field="in_game">—</div></div>
+    <div class="tile"><div class="lbl">Waiting for art</div><div class="num dash-skeleton" data-source="totals" data-field="waiting">—</div></div>
+    <div class="tile"><div class="lbl">Anomalies (switched off)</div><div class="num dash-skeleton" data-source="totals" data-field="switched_off">—</div></div>
+    <div class="tile"><div class="lbl">Neutral unit and spell cards</div><div class="num dash-skeleton" data-source="totals" data-field="neutral_main">—</div></div>
+  </section>
+
+  <section class="card" id="next">
+    <h2>Cards to make next</h2>
+    <p class="note">Ranked by how much each would help, from the gaps below and the simulations.</p>
+    <div class="scroll">
+      <table class="lx-needs" data-source="needs" data-row-key="rank">
+        <thead><tr><th data-field="rank">#</th><th data-field="need">What to make</th><th data-field="faction">Faction</th><th data-field="energy">Energy</th><th data-field="rarity" class="hide-narrow">Rarity</th><th data-field="why">Why</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="grid2">
+    <section class="card" id="curve">
+      <h2>Energy curve</h2>
+      <p class="note">Unit and spell cards in the game at each energy cost. Red zeros are costs with nothing to play.</p>
+      <div class="scroll">
+        <table class="heat lx-curve" data-source="curve" data-row-key="faction">
+          <thead><tr><th data-field="faction">Faction</th><th class="c" data-field="c1">1</th><th class="c" data-field="c2">2</th><th class="c" data-field="c3">3</th><th class="c" data-field="c4">4</th><th class="c" data-field="c5">5</th><th class="c" data-field="c6">6</th><th class="c" data-field="c7">7+</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card" id="roles">
+      <h2>What each faction can do</h2>
+      <p class="note">Unit and spell cards in the game with each kind of effect. A card can count in more than one column.</p>
+      <div class="scroll">
+        <table class="heat lx-roles" data-source="roles" data-row-key="faction">
+          <thead><tr><th data-field="faction">Faction</th><th class="c" data-field="removal">Removal</th><th class="c" data-field="control">Control</th><th class="c" data-field="buffs">Buffs</th><th class="c" data-field="protection">Protect</th><th class="c" data-field="healing">Heal</th><th class="c" data-field="card_draw">Draw</th><th class="c" data-field="face_damage">Face</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <div class="grid2">
+    <section class="card" id="factions">
+      <h2>Faction strength</h2>
+      <p class="note">Win rate in 5,000 games between random decks, Hard AI on both sides. 50% is even.</p>
+      <div class="chart lx-fchart" data-source="factions"></div>
+    </section>
+
+    <section class="card" id="commanders">
+      <h2>Commanders</h2>
+      <p class="note">Win rate in the same games, by the Commander leading the deck.</p>
+      <div class="scroll">
+        <table class="lx-cmd" data-source="commanders" data-row-key="id">
+          <thead><tr><th data-field="name">Commander</th><th data-field="ability" class="hide-narrow">Ability</th><th data-field="ability_cost" class="n">Cost</th><th data-field="win_rate" class="n">Win rate</th><th class="hide-narrow"></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <section class="card" id="outliers">
+    <h2>Cards that win or lose games</h2>
+    <p class="note">Win rate of decks running the card minus same-faction decks without it, in two separate 5,000-game runs. Only cards that agree in both runs are listed. Measured before The Great Comet became 5/4.</p>
+    <div class="scroll">
+      <table class="lx-out" data-source="outliers" data-row-key="id">
+        <thead><tr><th data-field="name">Card</th><th data-field="faction">Faction</th><th data-field="lift_run1" class="n">Run 1</th><th data-field="lift_run2" class="n">Run 2</th><th data-field="verdict">Verdict</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card" id="cards">
+    <h2>Every card</h2>
+    <p class="note">Search by name or text. Click a column to sort.</p>
+    <div class="controls">
+      <input id="lx-q" type="search" placeholder="Search cards" aria-label="Search cards">
+      <select id="lx-f" aria-label="Faction"><option value="">All factions</option></select>
+      <select id="lx-t" aria-label="Type"><option value="">All types</option></select>
+      <select id="lx-s" aria-label="Status"><option value="">Any status</option></select>
+      <span class="count lx-count"></span>
+    </div>
+    <div class="tablebox">
+      <table class="lx-all" data-source="cards" data-row-key="id">
+        <thead><tr>
+          <th data-field="name"><button data-k="name">Card</button></th>
+          <th data-field="faction"><button data-k="faction">Faction</button></th>
+          <th data-field="type"><button data-k="type">Type</button></th>
+          <th data-field="rarity" class="hide-narrow"><button data-k="rarity">Rarity</button></th>
+          <th data-field="energy" class="n"><button data-k="energy">Energy</button></th>
+          <th data-field="power" class="n hide-narrow"><button data-k="power">Pow</button></th>
+          <th data-field="hp" class="n hide-narrow"><button data-k="hp">HP</button></th>
+          <th data-field="roles" class="hide-narrow"><button data-k="roles">Effects</button></th>
+          <th data-field="text" class="hide-narrow">Text</th>
+          <th data-field="status"><button data-k="status">Status</button></th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script>
+  const FACTIONS = ['Solar', 'Lunar', 'Nebula', 'Void', 'Comet'];
+  const MAIN = (c) => (c.type === 'Unit' || c.type === 'Spell') && c.status === 'In the game';
+
+  dash.calc('totals', {
+    inputs: ['cards'], title: 'Card counts',
+    description: 'Cards by status, and unit and spell cards in the game per faction.',
+    fn: (cards) => {
+      const per = ['Solar', 'Lunar', 'Nebula', 'Void', 'Comet'].map((f) => cards.filter((c) => c.faction === f && (c.type === 'Unit' || c.type === 'Spell') && c.status === 'In the game').length);
+      return [{
+        in_game: cards.filter((c) => c.status === 'In the game').length,
+        waiting: cards.filter((c) => c.status === 'Waiting for art').length,
+        switched_off: cards.filter((c) => c.status === 'Switched off').length,
+        neutral_main: cards.filter((c) => c.faction === 'Neutral' && (c.type === 'Unit' || c.type === 'Spell') && c.status === 'In the game').length,
+        min_faction: Math.min(...per), max_faction: Math.max(...per),
+      }];
+    },
+  });
+
+  dash.calc('curve', {
+    inputs: ['cards'], title: 'Energy curve',
+    description: 'Unit and spell cards in the game per faction at each energy cost (7 and up together).',
+    fn: (cards) => ['Solar', 'Lunar', 'Nebula', 'Void', 'Comet', 'Neutral'].map((f) => {
+      const row = { faction: f };
+      for (let e = 1; e <= 7; e++) {
+        row['c' + e] = cards.filter((c) => c.faction === f && (c.type === 'Unit' || c.type === 'Spell') && c.status === 'In the game'
+          && (e === 7 ? Number(c.energy) >= 7 : Number(c.energy) === e)).length;
+      }
+      return row;
+    }),
+  });
+
+  dash.calc('roles', {
+    inputs: ['cards'], title: 'Effects per faction',
+    description: 'Unit and spell cards in the game per faction that have each kind of effect.',
+    fn: (cards) => ['Solar', 'Lunar', 'Nebula', 'Void', 'Comet'].map((f) => {
+      const mine = cards.filter((c) => c.faction === f && (c.type === 'Unit' || c.type === 'Spell') && c.status === 'In the game');
+      const has = (role) => mine.filter((c) => (c.roles || '').split(', ').includes(role)).length;
+      return { faction: f, removal: has('Removal'), control: has('Control'), buffs: has('Buffs'), protection: has('Protection'),
+        healing: has('Healing'), card_draw: has('Card draw'), face_damage: has('Face damage') };
+    }),
+  });
+
+  dash.calc('weakest', {
+    inputs: ['factions'], title: 'Weakest faction',
+    description: 'The faction with the lowest win rate in the random-deck games.',
+    fn: (factions) => [factions.slice().sort((a, b) => Number(a.win_rate) - Number(b.win_rate))[0]],
+  });
+
+  dash.calc('outliers', {
+    inputs: ['cards'], title: 'Cards that win or lose games',
+    description: 'Cards whose win-rate difference is at least 3 points the same way in both simulation runs.',
+    fn: (cards) => cards
+      .filter((c) => c.lift_run1 != null && c.lift_run2 != null
+        && ((Number(c.lift_run1) >= 3 && Number(c.lift_run2) >= 3) || (Number(c.lift_run1) <= -3 && Number(c.lift_run2) <= -3)))
+      .map((c) => ({ id: c.id, name: c.name, faction: c.faction, lift_run1: Number(c.lift_run1), lift_run2: Number(c.lift_run2),
+        verdict: Number(c.lift_run1) > 0 ? 'Wins games' : 'Loses games' }))
+      .sort((a, b) => (b.lift_run1 + b.lift_run2) - (a.lift_run1 + a.lift_run2)),
+  });
+
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const signed = (v) => (v > 0 ? '+' : '') + d3.format('.1f')(v);
+  const fcolor = (f) => dash.colors[Math.max(0, FACTIONS.indexOf(f))];
+
+  function fill(sel, id, field) {
+    const d = dash.data(id);
+    document.querySelectorAll(`[data-source="${id}"][data-field="${field}"]`).forEach((n) => {
+      if (d.status === 'ok' && d.data[0]) { n.textContent = String(d.data[0][field]); n.classList.remove('dash-skeleton'); }
+      else if (d.status === 'error') { n.textContent = '—'; n.classList.remove('dash-skeleton'); }
+      else n.textContent = '—';
+    });
+  }
+
+  function heat(table, id, cols, scaleMax) {
+    const d = dash.data(id);
+    const body = table.querySelector('tbody');
+    body.replaceChildren();
+    if (d.status !== 'ok') return;
+    const max = scaleMax || d3.max(d.data, (r) => d3.max(cols, (c) => Number(r[c]))) || 1;
+    for (const r of d.data) {
+      const tr = el('tr');
+      tr.dataset.key = r.faction;
+      tr.append(el('td', null, r.faction));
+      for (const c of cols) {
+        const v = Number(r[c]);
+        const td = el('td', 'cell' + (v === 0 && r.faction !== 'Neutral' ? ' zero' : ''), String(v));
+        const pct = Math.round(Math.min(1, v / max) * 70);
+        td.style.background = v > 0 ? `color-mix(in srgb, ${dash.colors[0]} ${pct}%, transparent)` : 'transparent';
+        tr.append(td);
+      }
+      body.append(tr);
+    }
+  }
+
+  function needs() {
+    const d = dash.data('needs');
+    const body = document.querySelector('.lx-needs tbody');
+    body.replaceChildren();
+    if (d.status !== 'ok') return;
+    for (const r of d.data) {
+      const tr = el('tr');
+      tr.dataset.key = String(r.rank);
+      tr.append(el('td', 'rank', String(r.rank)));
+      tr.append(el('td', 'need', r.need), el('td', null, r.faction), el('td', null, r.energy), el('td', 'hide-narrow', r.rarity), el('td', 'why', r.why));
+      body.append(tr);
+    }
+  }
+
+  function commanders() {
+    const d = dash.data('commanders');
+    const body = document.querySelector('.lx-cmd tbody');
+    body.replaceChildren();
+    if (d.status !== 'ok') return;
+    const rows = d.data.slice().sort((a, b) => Number(b.win_rate) - Number(a.win_rate));
+    for (const r of rows) {
+      const tr = el('tr');
+      tr.dataset.key = r.id;
+      const wr = Number(r.win_rate);
+      const barTd = el('td', 'hide-narrow');
+      const bar = el('div', 'bar');
+      const fillBar = el('i');
+      fillBar.style.width = Math.max(0, Math.min(100, (wr - 25) * 2)) + '%';
+      fillBar.style.background = wr < 45 ? 'var(--cds-chart-status-critical)' : fcolor(r.faction);
+      bar.append(fillBar, el('b', 'mid'));
+      barTd.append(bar);
+      barTd.style.verticalAlign = 'middle';
+      tr.append(el('td', null, r.name), el('td', 'hide-narrow txt', r.ability), el('td', 'n', String(r.ability_cost)), el('td', 'n', d3.format('.1f')(wr) + '%'), barTd);
+      body.append(tr);
+    }
+  }
+
+  function outliers() {
+    const d = dash.data('outliers');
+    const body = document.querySelector('.lx-out tbody');
+    body.replaceChildren();
+    if (d.status !== 'ok') return;
+    for (const r of d.data) {
+      const tr = el('tr');
+      tr.dataset.key = r.id;
+      const v = el('td');
+      v.append(el('span', 'pill ' + (r.verdict === 'Wins games' ? 'warn' : 'bad'), r.verdict));
+      tr.append(el('td', null, r.name), el('td', null, r.faction), el('td', 'n', signed(r.lift_run1)), el('td', 'n', signed(r.lift_run2)), v);
+      body.append(tr);
+    }
+  }
+
+  function factionChart() {
+    const box = document.querySelector('.lx-fchart');
+    const d = dash.data('factions');
+    box.replaceChildren();
+    if (d.status !== 'ok') return;
+    const rows = d.data.map((r) => ({ f: r.faction, v: Number(r.win_rate), n: Number(r.decks) })).sort((a, b) => b.v - a.v);
+    const W = Math.max(260, box.clientWidth), rowH = 34, top = 8, bottom = 26;
+    const H = top + rows.length * rowH + bottom;
+    const svg = d3.select(box).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+    const probe = svg.append('text').attr('font-size', 12).text('Nebula');
+    const left = probe.node().getComputedTextLength() + 16;
+    probe.remove();
+    const right = 48;
+    const x = d3.scaleLinear([30, 60], [left, W - right]);
+    const y = d3.scaleBand(rows.map((r) => r.f), [top, top + rows.length * rowH]).padding(0.3);
+    svg.append('g').selectAll('line').data([30, 40, 50, 60]).join('line')
+      .attr('x1', (t) => x(t)).attr('x2', (t) => x(t)).attr('y1', top).attr('y2', H - bottom)
+      .attr('stroke', (t) => t === 50 ? 'var(--cds-chart-reference)' : 'var(--cds-chart-grid)').attr('stroke-dasharray', (t) => t === 50 ? '4 3' : null);
+    svg.append('g').selectAll('text').data([30, 40, 50, 60]).join('text')
+      .attr('x', (t) => x(t)).attr('y', H - 8).attr('text-anchor', 'middle').attr('font-size', 11).attr('fill', 'var(--color-fg-muted)').text((t) => t + '%');
+    const tip = el('div', 'tip'); tip.hidden = true; box.append(tip);
+    const g = svg.append('g').selectAll('g').data(rows).join('g');
+    g.append('text').attr('x', left - 10).attr('y', (r) => y(r.f) + y.bandwidth() / 2).attr('dy', '0.35em').attr('text-anchor', 'end')
+      .attr('font-size', 12).attr('fill', 'var(--color-fg)').text((r) => r.f);
+    g.append('rect').attr('x', x(30)).attr('y', (r) => y(r.f)).attr('height', y.bandwidth()).attr('rx', 4)
+      .attr('width', (r) => Math.max(0, x(Math.max(30, r.v)) - x(30)))
+      .attr('fill', (r) => r.v < 45 ? 'var(--cds-chart-status-critical)' : fcolor(r.f))
+      .on('mousemove', (event, r) => {
+        tip.hidden = false;
+        tip.replaceChildren(el('div', 'k', r.f), el('div', null, d3.format('.1f')(r.v) + '% win rate · ' + d3.format(',')(r.n) + ' decks'));
+        const [mx, my] = d3.pointer(event, box);
+        tip.style.left = Math.min(mx + 12, box.clientWidth - tip.offsetWidth - 4) + 'px';
+        tip.style.top = (my - 10) + 'px';
+      })
+      .on('mouseleave', () => { tip.hidden = true; });
+    g.append('text').attr('x', (r) => x(Math.max(30, r.v)) + 6).attr('y', (r) => y(r.f) + y.bandwidth() / 2).attr('dy', '0.35em')
+      .attr('font-size', 12).attr('fill', 'var(--color-fg-muted)').text((r) => d3.format('.1f')(r.v) + '%');
+  }
+
+  // every card: search, filters and sorting (kept in the page)
+  const state = { q: '', f: '', t: '', s: '', key: 'faction', dir: 1 };
+  const RARITY = { Common: 1, Rare: 2, Epic: 3, Legendary: 4 };
+  const q = document.getElementById('lx-q'), fs = document.getElementById('lx-f'), ts = document.getElementById('lx-t'), ss = document.getElementById('lx-s');
+  q.addEventListener('input', () => { state.q = q.value.trim().toLowerCase(); allCards(); });
+  fs.addEventListener('change', () => { state.f = fs.value; allCards(); });
+  ts.addEventListener('change', () => { state.t = ts.value; allCards(); });
+  ss.addEventListener('change', () => { state.s = ss.value; allCards(); });
+  document.querySelectorAll('.lx-all th button').forEach((b) => b.addEventListener('click', () => {
+    const k = b.dataset.k;
+    state.dir = state.key === k ? -state.dir : 1;
+    state.key = k;
+    allCards();
+  }));
+  function options(sel, values, label) {
+    if (sel.options.length > 1) return;
+    for (const v of values) sel.append(new Option(v, v));
+  }
+  function allCards() {
+    const d = dash.data('cards');
+    const body = document.querySelector('.lx-all tbody');
+    body.replaceChildren();
+    if (d.status !== 'ok') { document.querySelector('.lx-count').textContent = ''; return; }
+    options(fs, [...new Set(d.data.map((c) => c.faction))]);
+    options(ts, [...new Set(d.data.map((c) => c.type))]);
+    options(ss, [...new Set(d.data.map((c) => c.status))]);
+    const num = new Set(['energy', 'power', 'hp']);
+    const val = (c) => state.key === 'rarity' ? RARITY[c.rarity] || 0 : num.has(state.key) ? (c[state.key] == null ? -1 : Number(c[state.key])) : String(c[state.key] || '');
+    const rows = d.data.filter((c) => (!state.f || c.faction === state.f) && (!state.t || c.type === state.t) && (!state.s || c.status === state.s)
+      && (!state.q || (c.name + ' ' + c.text + ' ' + c.keywords + ' ' + c.roles).toLowerCase().includes(state.q)))
+      .sort((a, b) => {
+        const va = val(a), vb = val(b);
+        const cmp = typeof va === 'number' ? va - vb : va.localeCompare(vb);
+        return cmp * state.dir || Number(a.energy) - Number(b.energy) || a.name.localeCompare(b.name);
+      });
+    for (const c of rows) {
+      const tr = el('tr');
+      tr.dataset.key = c.id;
+      const st = el('td');
+      st.append(el('span', 'pill' + (c.status === 'Waiting for art' ? ' warn' : c.status === 'Switched off' ? '' : ' ok'), c.status));
+      tr.append(el('td', null, c.name), el('td', null, c.faction), el('td', null, c.type), el('td', 'hide-narrow', c.rarity),
+        el('td', 'n', String(c.energy)), el('td', 'n hide-narrow', c.power == null ? '' : String(c.power)),
+        el('td', 'n hide-narrow', c.hp == null ? '' : String(c.hp)), el('td', 'hide-narrow txt', c.roles || ''),
+        el('td', 'hide-narrow txt', c.text || ''), st);
+      body.append(tr);
+    }
+    document.querySelector('.lx-count').textContent = d3.format(',')(rows.length) + ' shown';
+    document.querySelectorAll('.lx-all th[data-field]').forEach((th) => {
+      const b = th.querySelector('button');
+      th.setAttribute('aria-sort', b && b.dataset.k === state.key ? (state.dir > 0 ? 'ascending' : 'descending') : 'none');
+    });
+  }
+
+  dash.onData(() => {
+    for (const f of ['in_game', 'waiting', 'switched_off', 'neutral_main', 'min_faction', 'max_faction']) fill(null, 'totals', f);
+    fill(null, 'weakest', 'faction');
+    fill(null, 'weakest', 'win_rate');
+    needs();
+    heat(document.querySelector('.lx-curve'), 'curve', ['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7']);
+    heat(document.querySelector('.lx-roles'), 'roles', ['removal', 'control', 'buffs', 'protection', 'healing', 'card_draw', 'face_damage']);
+    factionChart();
+    commanders();
+    outliers();
+    allCards();
+  });
+</script>

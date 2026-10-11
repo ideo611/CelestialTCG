@@ -1,0 +1,62 @@
+5000 games, errors 0, avg turns 18.7
+First player wins 48.2%
+
+Best decks, win rate (Hard bot both sides):
+  Halley Voss, Comet Rider       + Tidewake Leviathan      62.1%  (59.1-65.1, n=995)
+  Kessa Frostwake                + Tidewake Leviathan      61.6%  (58.5-64.6, n=995)
+  Captain Sol Varro              + Equinox Seraph          56.9%  (53.8-59.9, n=1004)
+  Lyra, the Night Archivist      + Tidewake Leviathan      55.5%  (52.4-58.5, n=1004)
+  Ignara, the Forge-Mother       + Equinox Seraph          51.5%  (48.4-54.6, n=1004)
+  Orion, the Cloud Sage          + Moonveil Jellyfish      48.8%  (45.7-51.9, n=1000)
+  Nyx, the Event Horizon         + Umbra, the Eclipse Wyrm  44.0%  (41.0-47.1, n=995)
+  Tidekeeper Selene              + Tidewake Leviathan      42.6%  (39.6-45.7, n=1004)
+  Seraphine, the Star-Nursery    + Moonveil Jellyfish      42.0%  (39.0-45.1, n=1004)
+  Malakar, the Hollow King       + Umbra, the Eclipse Wyrm  35.0%  (32.1-38.0, n=995)
+
+Matchups (row's win rate vs column):
+            Voss Frostwa   Varro    Lyra  Ignara   Orion     Nyx  Selene Seraphi Malakar
+  Voss       -       49%     51%     63%     64%     45%     71%     82%     57%     77%
+  Frostwa    51%     -       63%     62%     63%     50%     66%     77%     50%     73%
+  Varro      49%     37%     -       33%     46%     63%     79%     54%     74%     77%
+  Lyra       37%     38%     67%     -       61%     71%     49%     55%     71%     50%
+  Ignara     36%     37%     54%     39%     -       53%     66%     39%     60%     79%
+  Orion      55%     50%     37%     29%     47%     -       60%     43%     59%     60%
+  Nyx        29%     34%     21%     51%     34%     40%     -       71%     53%     63%
+  Selene     18%     23%     46%     45%     61%     57%     29%     -       57%     47%
+  Seraphi    43%     50%     26%     29%     40%     41%     47%     43%     -       59%
+  Malakar    23%     27%     23%     50%     21%     40%     37%     53%     41%     -  
+
+Cards in the best decks, win rate when played (n>=150):
+  COM-022   The Great Comet               80.6%  (n=679)
+  SOL-013   Heart of the Sun              77.9%  (n=728)
+  COM-002   Slipstream                    70.0%  (n=803)
+  SOL-012   Varro's Rally                 69.2%  (n=510)
+  COM-019   Vanguard of the Long Orbit    68.1%  (n=1426)
+  COM-015   Starlance Interceptor         65.8%  (n=1493)
+  COM-010   Frostbite Archer              64.7%  (n=1440)
+  SOL-001   Ember Scout                   64.2%  (n=394)
+  COM-003   Ice Courier                   62.6%  (n=1250)
+  COM-005   Rime Hound                    61.3%  (n=1444)
+  COM-007   Ice Shard                     60.7%  (n=1440)
+  COM-004   Tailwind Glider               60.2%  (n=1381)
+  ...
+  VOI-013   Siphon                        40.2%  (n=1687)
+  VOI-018   Black Tide                    39.9%  (n=951)
+  VOI-007   Wither                        39.8%  (n=1659)
+  VOI-006   Null Acolyte                  39.5%  (n=1640)
+  VOI-023   Gravity Anchor                39.4%  (n=1655)
+  VOI-016   Umbral Lantern-Bearer         38.8%  (n=1612)
+  VOI-003   Gravity Mite                  38.7%  (n=1606)
+  VOI-001   Shade Wisp                    37.5%  (n=1584)
+
+Decklists:
+  Halley Voss, Comet Rider + Tidewake Leviathan: 3x Slipstream, 2x Ice Courier, 3x Tailwind Glider, 3x Rime Hound, 3x Recall Beacon, 3x Ice Shard, 3x Frostbite Archer, 3x Hailstorm, 3x Starlance Interceptor, 3x Vanguard of the Long Orbit, 1x The Great Comet
+  Kessa Frostwake + Tidewake Leviathan: 3x Slipstream, 2x Ice Courier, 3x Tailwind Glider, 3x Rime Hound, 3x Recall Beacon, 3x Ice Shard, 3x Frostbite Archer, 3x Hailstorm, 3x Starlance Interceptor, 3x Vanguard of the Long Orbit, 1x The Great Comet
+  Captain Sol Varro + Equinox Seraph: 3x Star Map, 1x Ember Scout, 3x Kindle, 1x Sunforge Cadet, 1x Solar Lancer, 3x Blazewing Hawk, 2x Corona Knight, 3x Varro's Rally, 1x Heart of the Sun, 3x Spark Sprite, 3x Sunburst, 3x Ember Drummer, 3x Solar Phoenix
+  Lyra, the Night Archivist + Tidewake Leviathan: 3x Moonlit Wisp, 3x Silver Barrier, 3x Crescent Archer, 3x Tide Sentinel, 3x Moonbeam, 3x Eclipse Veil, 3x Silver Mender, 3x Undertow, 3x Crescent Warden, 3x Moonlight Oracle
+  Ignara, the Forge-Mother + Equinox Seraph: 3x Star Map, 3x Kindle, 3x Sunforge Cadet, 3x Solar Lancer, 3x Blazewing Hawk, 2x Corona Knight, 1x Heart of the Sun, 3x Spark Sprite, 3x Sunburst, 3x Ember Drummer, 3x Solar Phoenix
+  Orion, the Cloud Sage + Moonveil Jellyfish: 3x Gasbloom Sprout, 3x Spore Burst, 3x Photon Gardener, 3x Drift Grazer, 3x Star Cradle, 3x Gravity Bloom, 3x Aurora Stag, 3x Genesis Bloom, 1x The First Light, 2x Petal Ward, 3x Star Map
+  Nyx, the Event Horizon + Umbra, the Eclipse Wyrm: 3x Star Map, 3x Shade Wisp, 3x Gravity Mite, 3x Null Acolyte, 3x Wither, 3x Dark Matter Shroud, 3x Siphon, 3x Umbral Lantern-Bearer, 2x Black Tide, 1x Night Sovereign, 3x Gravity Anchor
+  Tidekeeper Selene + Tidewake Leviathan: 3x Moonlit Wisp, 3x Silver Barrier, 3x Crescent Archer, 3x Tide Sentinel, 3x Moonbeam, 3x Eclipse Veil, 3x Silver Mender, 3x Undertow, 3x Crescent Warden, 3x Moonlight Oracle
+  Seraphine, the Star-Nursery + Moonveil Jellyfish: 3x Gasbloom Sprout, 3x Spore Burst, 3x Photon Gardener, 3x Drift Grazer, 3x Star Cradle, 3x Gravity Bloom, 3x Aurora Stag, 3x Genesis Bloom, 1x The First Light, 2x Petal Ward, 3x Star Map
+  Malakar, the Hollow King + Umbra, the Eclipse Wyrm: 3x Star Map, 3x Shade Wisp, 3x Gravity Mite, 3x Null Acolyte, 3x Wither, 3x Dark Matter Shroud, 3x Siphon, 3x Umbral Lantern-Bearer, 2x Black Tide, 1x Night Sovereign, 3x Gravity Anchor

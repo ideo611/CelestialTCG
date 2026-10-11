@@ -1361,7 +1361,7 @@ addCard {
 
 addCard {
 	Id = "COM-022", Name = "The Great Comet", Faction = "Comet", Type = "Unit", Rarity = "Legendary",
-	EnergyCost = 7, StarCost = 5, Power = 7, HP = 7,
+	EnergyCost = 7, StarCost = 5, Power = 5, HP = 4, -- (was 7/7: it won 80% of the games it was played in)
 	Keywords = { Rush = true, Streak = true },
 }
 

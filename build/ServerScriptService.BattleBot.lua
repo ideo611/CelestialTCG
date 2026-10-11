@@ -212,7 +212,7 @@ local function tryOneAction(battle, seat)
 		if effect.Kind == "PayForEnergy" then
 			-- only if the extra energy lets it play something it can't afford now
 			worthIt = false
-			if me.HP > effect.HP + 8 then
+			if (effect.HP or 0) == 0 or me.HP > effect.HP + 8 then
 				local energyAfter = me.Energy - ability.EnergyCost + effect.Energy
 				for _, cardId in ipairs(me.Hand) do
 					local cost = CardDatabase.GetCard(cardId).EnergyCost

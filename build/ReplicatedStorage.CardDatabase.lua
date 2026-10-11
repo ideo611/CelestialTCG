@@ -370,8 +370,8 @@ addCard {
 	HP = 20,
 	CommanderAbility = {
 		EnergyCost = 2,
-		Text = "Your Commander takes 2 damage. Gain 3 energy this turn.",
-		Effect = { Kind = "PayForEnergy", HP = 2, Energy = 3 },
+		Text = "Gain 3 energy this turn.",
+		Effect = { Kind = "PayForEnergy", HP = 0, Energy = 3 },
 	},
 }
 

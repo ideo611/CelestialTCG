@@ -749,7 +749,7 @@ function Battle:_checkEffect(seat, effect, target)
 			return false, "Your Commander is already at full HP."
 		end
 	end
-	if effect.Kind == "PayForEnergy" and self.Players[seat].HP <= effect.HP then
+	if effect.Kind == "PayForEnergy" and (effect.HP or 0) > 0 and self.Players[seat].HP <= effect.HP then
 		return false, "Your Commander doesn't have enough HP to pay."
 	end
 	local needsFriendly = { BuffAllFriendly = true, GrowAllFriendly = true, StreakAllFriendly = true,
@@ -952,9 +952,12 @@ function Battle:_applyEffect(seat, effect, target, source)
 		end
 	elseif kind == "PayForEnergy" then
 		local player = self.Players[seat]
-		player.HP = player.HP - effect.HP
+		local hp = effect.HP or 0
 		player.Energy = player.Energy + effect.Energy
-		self:_emit({ Type = "CommanderPaidHP", Player = seat, Amount = effect.HP, HP = player.HP })
+		if hp > 0 then
+			player.HP = player.HP - hp
+			self:_emit({ Type = "CommanderPaidHP", Player = seat, Amount = hp, HP = player.HP })
+		end
 		self:_emit({ Type = "EnergyGained", Player = seat, Amount = effect.Energy, Energy = player.Energy })
 	else
 		error("Unknown effect kind: " .. tostring(kind))

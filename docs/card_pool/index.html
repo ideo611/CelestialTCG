@@ -40,6 +40,10 @@
   .cp .muted { color: var(--color-fg-muted); }
   .cp .txt { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); max-width: 36ch; }
   .cp .count { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+  .cp .verdicts { display: flex; flex-wrap: wrap; gap: var(--cds-gap-sm); margin-bottom: var(--cds-gap-sm); }
+  .cp .vchip { display: inline-flex; align-items: center; gap: 6px; }
+  .cp .vnum { font-variant-numeric: tabular-nums; font-weight: var(--cds-font-weight-medium); }
+  .cp .lx-strip { min-height: 280px; }
   .cp [data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
   @media (max-width: 640px) { .cp .hide-narrow { display: none; } }
 </style>
@@ -51,7 +55,8 @@
       <span class="dash-skeleton" data-source="totals" data-field="waiting">—</span> more are waiting for art.
       Each faction has <span class="dash-skeleton" data-source="totals" data-field="min_faction">—</span>–<span class="dash-skeleton" data-source="totals" data-field="max_faction">—</span>
       unit and spell cards; <span class="dash-skeleton lx-weak-name" data-source="weakest" data-field="faction">—</span> is the weakest faction,
-      winning <span class="dash-skeleton lx-weak-wr" data-source="weakest" data-field="win_rate">—</span>% of simulated games.</p>
+      winning <span class="dash-skeleton lx-weak-wr" data-source="weakest" data-field="win_rate">—</span>% of simulated games.
+      Balance figures come from <span class="dash-skeleton" data-source="summary" data-field="games">—</span> simulated matches on the current update.</p>
   </header>
 
   <section class="tiles" id="totals">
@@ -59,6 +64,15 @@
     <div class="tile"><div class="lbl">Waiting for art</div><div class="num dash-skeleton" data-source="totals" data-field="waiting">—</div></div>
     <div class="tile"><div class="lbl">Anomalies (switched off)</div><div class="num dash-skeleton" data-source="totals" data-field="switched_off">—</div></div>
     <div class="tile"><div class="lbl">Neutral unit and spell cards</div><div class="num dash-skeleton" data-source="totals" data-field="neutral_main">—</div></div>
+    <div class="tile"><div class="lbl">Matches simulated</div><div class="num dash-skeleton lx-games" data-source="summary" data-field="games">—</div></div>
+    <div class="tile"><div class="lbl">First player wins</div><div class="num dash-skeleton lx-first" data-source="summary" data-field="first_player_win_rate">—</div></div>
+  </section>
+
+  <section class="card" id="balance">
+    <h2>Card balance</h2>
+    <p class="note">Each dot is a card: how much more often decks with it win than decks of the same faction without it. Right of the line helps, left hurts. A Celestial is measured against the other Celestials its decks could have run. Hover a dot for details.</p>
+    <div class="verdicts lx-verdicts" data-source="verdicts"></div>
+    <div class="chart lx-strip" data-source="cards"></div>
   </section>
 
   <section class="card" id="next">
@@ -99,13 +113,13 @@
   <div class="grid2">
     <section class="card" id="factions">
       <h2>Faction strength</h2>
-      <p class="note">Win rate in 5,000 games between random decks, Hard AI on both sides. 50% is even.</p>
+      <p class="note">Win rate in 100,000 matches between random legal decks on the current update, Hard AI on both sides. 50% is even.</p>
       <div class="chart lx-fchart" data-source="factions"></div>
     </section>
 
     <section class="card" id="commanders">
       <h2>Commanders</h2>
-      <p class="note">Win rate in the same games, by the Commander leading the deck.</p>
+      <p class="note">Win rate in the same matches, by the Commander leading the deck.</p>
       <div class="scroll">
         <table class="lx-cmd" data-source="commanders" data-row-key="id">
           <thead><tr><th data-field="name">Commander</th><th data-field="ability" class="hide-narrow">Ability</th><th data-field="ability_cost" class="n">Cost</th><th data-field="win_rate" class="n">Win rate</th><th class="hide-narrow"></th></tr></thead>
@@ -116,11 +130,11 @@
   </div>
 
   <section class="card" id="outliers">
-    <h2>Cards that win or lose games</h2>
-    <p class="note">Win rate of decks running the card minus same-faction decks without it, in two separate 5,000-game runs. Only cards that agree in both runs are listed. Measured before The Great Comet became 5/4.</p>
+    <h2>Cards to look at</h2>
+    <p class="note">Cards whose effect on win rate is clear in the simulations (the 95% range doesn't cross zero), strongest first. Win rate when played counts only games where the card hit the board.</p>
     <div class="scroll">
       <table class="lx-out" data-source="outliers" data-row-key="id">
-        <thead><tr><th data-field="name">Card</th><th data-field="faction">Faction</th><th data-field="lift_run1" class="n">Run 1</th><th data-field="lift_run2" class="n">Run 2</th><th data-field="verdict">Verdict</th></tr></thead>
+        <thead><tr><th data-field="name">Card</th><th data-field="faction">Faction</th><th data-field="energy" class="n">Energy</th><th data-field="lift" class="n">Effect on win rate</th><th data-field="played_win_rate" class="n hide-narrow">Win rate when played</th><th data-field="play_rate" class="n hide-narrow">Played</th><th data-field="verdict">Verdict</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -146,6 +160,10 @@
           <th data-field="energy" class="n"><button data-k="energy">Energy</button></th>
           <th data-field="power" class="n hide-narrow"><button data-k="power">Pow</button></th>
           <th data-field="hp" class="n hide-narrow"><button data-k="hp">HP</button></th>
+          <th data-field="lift" class="n"><button data-k="lift">Effect on win rate</button></th>
+          <th data-field="played_win_rate" class="n hide-narrow"><button data-k="played_win_rate">Win rate played</button></th>
+          <th data-field="play_rate" class="n hide-narrow"><button data-k="play_rate">Played</button></th>
+          <th data-field="verdict"><button data-k="verdict">Verdict</button></th>
           <th data-field="roles" class="hide-narrow"><button data-k="roles">Effects</button></th>
           <th data-field="text" class="hide-narrow">Text</th>
           <th data-field="status"><button data-k="status">Status</button></th>
@@ -206,24 +224,39 @@
   });
 
   dash.calc('outliers', {
-    inputs: ['cards'], title: 'Cards that win or lose games',
-    description: 'Cards whose win-rate difference is at least 3 points the same way in both simulation runs.',
+    inputs: ['cards'], title: 'Cards to look at',
+    description: 'Cards rated Too strong, Strong, Weak or Too weak in the balance simulations, strongest first.',
     fn: (cards) => cards
-      .filter((c) => c.lift_run1 != null && c.lift_run2 != null
-        && ((Number(c.lift_run1) >= 3 && Number(c.lift_run2) >= 3) || (Number(c.lift_run1) <= -3 && Number(c.lift_run2) <= -3)))
-      .map((c) => ({ id: c.id, name: c.name, faction: c.faction, lift_run1: Number(c.lift_run1), lift_run2: Number(c.lift_run2),
-        verdict: Number(c.lift_run1) > 0 ? 'Wins games' : 'Loses games' }))
-      .sort((a, b) => (b.lift_run1 + b.lift_run2) - (a.lift_run1 + a.lift_run2)),
+      .filter((c) => ['Too strong', 'Strong', 'Weak', 'Too weak'].includes(c.verdict))
+      .map((c) => ({ id: c.id, name: c.name, faction: c.faction, energy: Number(c.energy), lift: Number(c.lift),
+        played_win_rate: c.played_win_rate == null ? null : Number(c.played_win_rate),
+        play_rate: c.play_rate == null ? null : Number(c.play_rate), verdict: c.verdict }))
+      .sort((a, b) => b.lift - a.lift),
+  });
+
+  dash.calc('verdicts', {
+    inputs: ['cards'], title: 'Cards by verdict',
+    description: 'How many cards got each balance verdict.',
+    fn: (cards) => ['Too strong', 'Strong', 'Balanced', 'Weak', 'Too weak'].map((v) => ({ verdict: v, cards: cards.filter((c) => c.verdict === v).length })),
   });
 
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const signed = (v) => (v > 0 ? '+' : '') + d3.format('.1f')(v);
   const fcolor = (f) => dash.colors[Math.max(0, FACTIONS.indexOf(f))];
+  const VCLASS = { 'Too strong': 'bad', 'Strong': 'warn', 'Balanced': 'ok', 'Weak': 'warn', 'Too weak': 'bad', 'Not enough games': '' };
+  const VORDER = { 'Too strong': 0, 'Strong': 1, 'Balanced': 2, 'Weak': 3, 'Too weak': 4, 'Not enough games': 5 };
+  const VCOLOR = { 'Too strong': 'var(--cds-chart-status-critical)', 'Strong': 'var(--color-warn)', 'Balanced': 'var(--cds-chart-muted)',
+    'Weak': 'var(--color-warn)', 'Too weak': 'var(--cds-chart-status-critical)' };
+  const vcell = (v) => { const td = el('td'); if (v) td.append(el('span', 'pill ' + (VCLASS[v] || ''), v)); return td; };
 
   function fill(sel, id, field) {
     const d = dash.data(id);
     document.querySelectorAll(`[data-source="${id}"][data-field="${field}"]`).forEach((n) => {
-      if (d.status === 'ok' && d.data[0]) { n.textContent = String(d.data[0][field]); n.classList.remove('dash-skeleton'); }
+      if (d.status === 'ok' && d.data[0]) {
+        const v = d.data[0][field];
+        n.textContent = typeof v === 'number' ? (field.endsWith('win_rate') ? d3.format('.1f')(v) + (n.classList.contains('num') ? '%' : '') : d3.format(',')(v)) : String(v);
+        n.classList.remove('dash-skeleton');
+      }
       else if (d.status === 'error') { n.textContent = '—'; n.classList.remove('dash-skeleton'); }
       else n.textContent = '—';
     });
@@ -296,8 +329,10 @@
       const tr = el('tr');
       tr.dataset.key = r.id;
       const v = el('td');
-      v.append(el('span', 'pill ' + (r.verdict === 'Wins games' ? 'warn' : 'bad'), r.verdict));
-      tr.append(el('td', null, r.name), el('td', null, r.faction), el('td', 'n', signed(r.lift_run1)), el('td', 'n', signed(r.lift_run2)), v);
+      v.append(el('span', 'pill ' + VCLASS[r.verdict], r.verdict));
+      tr.append(el('td', null, r.name), el('td', null, r.faction), el('td', 'n', String(r.energy)), el('td', 'n', signed(r.lift) + ' pts'),
+        el('td', 'n hide-narrow', r.played_win_rate == null ? '' : d3.format('.1f')(r.played_win_rate) + '%'),
+        el('td', 'n hide-narrow', r.play_rate == null ? '' : d3.format('.0f')(r.play_rate) + '%'), v);
       body.append(tr);
     }
   }
@@ -341,6 +376,65 @@
       .attr('font-size', 12).attr('fill', 'var(--color-fg-muted)').text((r) => d3.format('.1f')(r.v) + '%');
   }
 
+  function verdicts() {
+    const box = document.querySelector('.lx-verdicts');
+    const d = dash.data('verdicts');
+    box.replaceChildren();
+    if (d.status !== 'ok') return;
+    for (const r of d.data) {
+      const chip = el('span', 'vchip');
+      chip.append(el('span', 'pill ' + VCLASS[r.verdict], r.verdict), el('span', 'vnum', String(r.cards)));
+      box.append(chip);
+    }
+  }
+
+  function strip() {
+    const box = document.querySelector('.lx-strip');
+    const d = dash.data('cards');
+    box.replaceChildren();
+    if (d.status !== 'ok') return;
+    const pts = d.data.filter((c) => c.lift != null && c.status === 'In the game').map((c) => ({ c, v: Number(c.lift) }));
+    const groups = ['Solar', 'Lunar', 'Nebula', 'Void', 'Comet', 'Neutral'].filter((f) => pts.some((p) => p.c.faction === f));
+    const W = Math.max(280, box.clientWidth), rowH = 40, top = 6, bottom = 28;
+    const H = top + groups.length * rowH + bottom;
+    const svg = d3.select(box).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+    const probe = svg.append('text').attr('font-size', 12).text('Neutral');
+    const left = probe.node().getComputedTextLength() + 16;
+    probe.remove();
+    const ext = d3.max(pts, (p) => Math.abs(p.v)) || 5;
+    const lim = Math.ceil(ext / 5) * 5;
+    const x = d3.scaleLinear([-lim, lim], [left, W - 12]);
+    const y = d3.scaleBand(groups, [top, top + groups.length * rowH]).padding(0.15);
+    const ticks = x.ticks(Math.max(3, Math.floor((W - left) / 70)));
+    svg.append('g').selectAll('line').data(ticks).join('line')
+      .attr('x1', (t) => x(t)).attr('x2', (t) => x(t)).attr('y1', top).attr('y2', H - bottom)
+      .attr('stroke', (t) => t === 0 ? 'var(--cds-chart-reference)' : 'var(--cds-chart-grid)').attr('stroke-dasharray', (t) => t === 0 ? '4 3' : null);
+    svg.append('g').selectAll('text').data(ticks).join('text')
+      .attr('x', (t) => x(t)).attr('y', H - 9).attr('text-anchor', 'middle').attr('font-size', 11).attr('fill', 'var(--color-fg-muted)')
+      .text((t) => (t > 0 ? '+' : '') + t + ' pts');
+    svg.append('g').selectAll('text').data(groups).join('text')
+      .attr('x', left - 10).attr('y', (g) => y(g) + y.bandwidth() / 2).attr('dy', '0.35em').attr('text-anchor', 'end')
+      .attr('font-size', 12).attr('fill', 'var(--color-fg)').text((g) => g);
+    const tip = el('div', 'tip'); tip.hidden = true; box.append(tip);
+    const jitter = (id) => { let h = 0; for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) % 1000; return (h / 1000 - 0.5) * 0.6; };
+    svg.append('g').selectAll('circle').data(pts).join('circle')
+      .attr('cx', (p) => x(p.v)).attr('cy', (p) => y(p.c.faction) + y.bandwidth() * (0.5 + jitter(p.c.id))).attr('r', 5)
+      .attr('fill', (p) => VCOLOR[p.c.verdict] || 'var(--cds-chart-muted)').attr('fill-opacity', 0.85)
+      .attr('stroke', 'var(--color-panel)').attr('stroke-width', 1)
+      .on('mousemove', (event, p) => {
+        tip.hidden = false;
+        const lines = [el('div', 'k', p.c.name + ' · ' + p.c.faction + ' ' + p.c.type),
+          el('div', null, signed(p.v) + ' pts (' + signed(Number(p.c.lift_low)) + ' to ' + signed(Number(p.c.lift_high)) + ')'),
+          el('div', null, p.c.verdict)];
+        if (p.c.played_win_rate != null) lines.push(el('div', null, d3.format('.1f')(Number(p.c.played_win_rate)) + '% win rate when played'));
+        tip.replaceChildren(...lines);
+        const [mx, my] = d3.pointer(event, box);
+        tip.style.left = Math.max(4, Math.min(mx + 12, box.clientWidth - tip.offsetWidth - 4)) + 'px';
+        tip.style.top = (my - 10) + 'px';
+      })
+      .on('mouseleave', () => { tip.hidden = true; });
+  }
+
   // every card: search, filters and sorting (kept in the page)
   const state = { q: '', f: '', t: '', s: '', key: 'faction', dir: 1 };
   const RARITY = { Common: 1, Rare: 2, Epic: 3, Legendary: 4 };
@@ -367,8 +461,8 @@
     options(fs, [...new Set(d.data.map((c) => c.faction))]);
     options(ts, [...new Set(d.data.map((c) => c.type))]);
     options(ss, [...new Set(d.data.map((c) => c.status))]);
-    const num = new Set(['energy', 'power', 'hp']);
-    const val = (c) => state.key === 'rarity' ? RARITY[c.rarity] || 0 : num.has(state.key) ? (c[state.key] == null ? -1 : Number(c[state.key])) : String(c[state.key] || '');
+    const num = new Set(['energy', 'power', 'hp', 'lift', 'played_win_rate', 'play_rate']);
+    const val = (c) => state.key === 'rarity' ? RARITY[c.rarity] || 0 : state.key === 'verdict' ? (VORDER[c.verdict] ?? 9) : num.has(state.key) ? (c[state.key] == null ? -1 : Number(c[state.key])) : String(c[state.key] || '');
     const rows = d.data.filter((c) => (!state.f || c.faction === state.f) && (!state.t || c.type === state.t) && (!state.s || c.status === state.s)
       && (!state.q || (c.name + ' ' + c.text + ' ' + c.keywords + ' ' + c.roles).toLowerCase().includes(state.q)))
       .sort((a, b) => {
@@ -383,7 +477,11 @@
       st.append(el('span', 'pill' + (c.status === 'Waiting for art' ? ' warn' : c.status === 'Switched off' ? '' : ' ok'), c.status));
       tr.append(el('td', null, c.name), el('td', null, c.faction), el('td', null, c.type), el('td', 'hide-narrow', c.rarity),
         el('td', 'n', String(c.energy)), el('td', 'n hide-narrow', c.power == null ? '' : String(c.power)),
-        el('td', 'n hide-narrow', c.hp == null ? '' : String(c.hp)), el('td', 'hide-narrow txt', c.roles || ''),
+        el('td', 'n hide-narrow', c.hp == null ? '' : String(c.hp)),
+        el('td', 'n', c.lift == null ? '' : signed(Number(c.lift))),
+        el('td', 'n hide-narrow', c.played_win_rate == null ? '' : d3.format('.1f')(Number(c.played_win_rate)) + '%'),
+        el('td', 'n hide-narrow', c.play_rate == null ? '' : d3.format('.0f')(Number(c.play_rate)) + '%'),
+        vcell(c.verdict), el('td', 'hide-narrow txt', c.roles || ''),
         el('td', 'hide-narrow txt', c.text || ''), st);
       body.append(tr);
     }
@@ -404,6 +502,10 @@
     factionChart();
     commanders();
     outliers();
+    verdicts();
+    strip();
+    fill(null, 'summary', 'games');
+    fill(null, 'summary', 'first_player_win_rate');
     allCards();
   });
 </script>

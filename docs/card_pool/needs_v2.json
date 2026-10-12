@@ -1,0 +1,82 @@
+[
+ {
+  "rank": 1,
+  "faction": "All",
+  "need": "Release the 10 finished Legendaries waiting for art",
+  "energy": "3\u20136",
+  "rarity": "Legendary",
+  "why": "They are designed and tested; each needs only its art uploaded. They add two cards to every faction."
+ },
+ {
+  "rank": 2,
+  "faction": "Void",
+  "need": "A 2-energy unit that wins early fights",
+  "energy": "2",
+  "rarity": "Common",
+  "why": "Void is the weakest faction, winning 44% of 100,000 simulated matches, and its small 2-energy units lose trades."
+ },
+ {
+  "rank": 3,
+  "faction": "Nebula",
+  "need": "Removal that fits the Grow theme",
+  "energy": "3\u20134",
+  "rarity": "Rare",
+  "why": "Nebula has only two removal spells, the fewest of any faction, so its units get outgrown by bigger enemies."
+ },
+ {
+  "rank": 4,
+  "faction": "Comet",
+  "need": "Plays at 3 and 5 energy",
+  "energy": "3, 5",
+  "rarity": "Common, Rare",
+  "why": "Comet has eight cards at 2 energy but only two at 3 and one at 5, so its decks run out of good plays mid-game."
+ },
+ {
+  "rank": 5,
+  "faction": "Solar, Nebula",
+  "need": "A 6-energy finisher",
+  "energy": "6",
+  "rarity": "Epic",
+  "why": "Neither faction has a card at 6 energy, so decks jump from 5-cost cards straight to their 7-cost Legendary. (Void's Devour, waiting for art, fills Void's gap.)"
+ },
+ {
+  "rank": 6,
+  "faction": "Neutral",
+  "need": "Four to six cards any deck can use",
+  "energy": "1\u20134",
+  "rarity": "Common, Rare",
+  "why": "Star Map is the only neutral main-deck card. Neutral cards give every deck more choices and add variety to packs."
+ },
+ {
+  "rank": 7,
+  "faction": "Lunar",
+  "need": "A second way to pressure the enemy Commander",
+  "energy": "4\u20136",
+  "rarity": "Rare",
+  "why": "Lunar has a dozen healing cards but only Moontide Siren turns that healing into damage, so its games drag on."
+ },
+ {
+  "rank": 8,
+  "faction": "Comet, Solar, Nebula",
+  "need": "Rework the cards that lose games",
+  "energy": "\u2014",
+  "rarity": "\u2014",
+  "why": "Perihelion Dash, Frostwake Tide, Deflect, Heat Wave and Bloom Surge all lower their decks' win rate in 100,000 matches. Fixing them adds depth without adding cards."
+ },
+ {
+  "rank": 9,
+  "faction": "Solar, Lunar, Void, Comet",
+  "need": "Tone down the cards rated Too strong",
+  "energy": "\u2014",
+  "rarity": "\u2014",
+  "why": "Varro's Rally, Heart of the Sun, Night Sovereign, Moonbeam and Starlance Interceptor raise their decks' win rate the most. Small cost or stat changes would even them out."
+ },
+ {
+  "rank": 10,
+  "faction": "Solar, Nebula, Void, Comet",
+  "need": "Rework the three weakest Celestials",
+  "energy": "7",
+  "rarity": "Legendary",
+  "why": "Black Sun Harbinger, Oort Reaper and Pulsar Remnant lose 4\u20136 points of win rate against the other Celestials their decks could run."
+ }
+]
